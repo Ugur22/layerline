@@ -1,4 +1,4 @@
-.PHONY: up down logs backend-check backend-fix frontend-check frontend-fix check
+.PHONY: up down logs backend-check backend-fix frontend-check frontend-fix check e2e
 
 up:
 	docker compose up -d --build
@@ -23,3 +23,7 @@ frontend-fix:
 	cd frontend && npx eslint --fix . && npm run format
 
 check: backend-check frontend-check
+
+# Needs the stack (`make up`); Playwright starts its own frontend dev server on port 5199.
+e2e:
+	cd frontend && npx playwright test

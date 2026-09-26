@@ -60,7 +60,8 @@ export function MapPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number })
             />
             <div className="h-96 overflow-hidden rounded-lg border">
               <Suspense fallback={<p className="p-4 text-sm">Loading map…</p>}>
-                <LayerMap layer={layer.data} />
+                {/* A new layer must refit the view and reset readiness, so it remounts the map. */}
+                <LayerMap key={layer.data.map_layer.id} layer={layer.data} />
               </Suspense>
             </div>
           </>
