@@ -14,6 +14,8 @@ export function MapPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number })
   const { jobId, filter, setFilter } = useImportSession()
   const layerId = useImportJob(jobId, pollIntervalMs).data?.map_layer_id
   const layer = useMapLayer(layerId, filter)
+  // Same query as `layer` while no filter is set; otherwise one extra fetch so colours stay stable.
+  const fullLayer = useMapLayer(layerId, null)
 
   // The map only exists once an import has produced a layer.
   if (!layerId) return null
@@ -61,7 +63,11 @@ export function MapPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number })
             <div className="h-[min(70vh,48rem)] min-h-96 overflow-hidden rounded-lg border">
               <Suspense fallback={<p className="p-4 text-sm">Loading map…</p>}>
                 {/* A new layer must refit the view and reset readiness, so it remounts the map. */}
-                <LayerMap key={layer.data.map_layer.id} layer={layer.data} />
+                <LayerMap
+                  key={layer.data.map_layer.id}
+                  layer={layer.data}
+                  styleFeatures={fullLayer.data?.features.features}
+                />
               </Suspense>
             </div>
           </>

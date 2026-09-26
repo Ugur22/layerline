@@ -45,7 +45,7 @@ Acceptance for the slice:
 - a valid file renders the same number of features it contained;
 - the flow is covered by one end-to-end test.
 
-Deliberately excluded from the first slice: authentication beyond a placeholder (Open: see `architecture.md`) and editing. CSV import, property filtering, and one layer per import (several per dataset) were added afterwards; see `api-contracts.md`.
+Deliberately excluded from the first slice: authentication beyond a placeholder (Open: see `architecture.md`) and editing. CSV import, property filtering, one layer per import (several per dataset), and on the map a click-to-inspect popup and colouring points by a property (client-side, no contract change) were added afterwards; see `api-contracts.md`.
 
 ## Open questions
 

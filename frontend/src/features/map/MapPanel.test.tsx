@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ImportJob, MapLayerResponse } from '@/api/types'
@@ -26,7 +26,19 @@ vi.mock('react-map-gl/maplibre', async () => {
         { 'data-testid': 'source', 'data-count': props.data.features.length },
         props.children as never,
       ),
-    Layer: () => React.createElement('div', { 'data-testid': 'layer' }),
+    Layer: (props: {
+      id: string
+      paint: Record<string, unknown>
+      layout?: Record<string, unknown>
+    }) =>
+      React.createElement('div', {
+        'data-testid': props.id === 'layer-points' ? 'layer' : props.id,
+        'data-color': JSON.stringify(props.paint['circle-color']),
+        'data-radius': JSON.stringify(props.paint['circle-radius']),
+        'data-label': JSON.stringify(props.layout?.['text-field']),
+      }),
+    Popup: (props: { children: unknown }) =>
+      React.createElement('div', { 'data-testid': 'popup' }, props.children as never),
   }
 })
 
@@ -74,6 +86,29 @@ function layer(
       features: onlyFirst
         ? [point('a', 4.9, 52.37)]
         : [point('a', 4.9, 52.37), point('b', 4.95, 52.4)],
+    },
+  }
+}
+
+function layerWithProperties(rows: Record<string, unknown>[], keys: string[]): MapLayerResponse {
+  return {
+    map_layer: {
+      id: 'layer-1',
+      dataset_id: 'dataset-1',
+      name: 'good',
+      geometry_type: 'Point',
+      feature_count: rows.length,
+      bbox: [4.9, 52.37, 4.95, 52.4],
+      property_keys: keys,
+    },
+    features: {
+      type: 'FeatureCollection',
+      features: rows.map((properties, index) => ({
+        type: 'Feature' as const,
+        id: String(index),
+        geometry: { type: 'Point' as const, coordinates: [4.9, 52.37] },
+        properties,
+      })),
     },
   }
 }
@@ -328,5 +363,180 @@ describe('MapPanel', () => {
       '/api/v1/map-layers/layer-1?property=name&value=+A',
       undefined,
     )
+  })
+
+  describe('colour by property', () => {
+    const rows = [
+      { type: 'buoy', depth_m: '8.6' },
+      { type: 'mooring', depth_m: '12' },
+      { type: 'buoy' },
+    ]
+
+    it('draws points in one colour until a property is chosen, then shows a legend', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layerWithProperties(rows, ['type', 'depth_m'])),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      const colorBy = await screen.findByLabelText('Colour by')
+      await vi.waitFor(() => {
+        expect(colorBy).toBeEnabled()
+      })
+      expect(screen.getByTestId('layer').getAttribute('data-color')).toBe('"#4f46e5"')
+      expect(screen.queryByRole('group', { name: /legend/i })).not.toBeInTheDocument()
+
+      await user.selectOptions(colorBy, 'depth_m')
+
+      const legend = screen.getByRole('group', { name: 'Legend for depth_m' })
+      expect(legend).toHaveTextContent('8.6')
+      expect(legend).toHaveTextContent('12')
+      expect(legend).toHaveTextContent('No value')
+      expect(screen.getByTestId('layer').getAttribute('data-color')).toContain('interpolate')
+
+      await user.selectOptions(colorBy, 'type')
+
+      const categories = screen.getByRole('group', { name: 'Legend for type' })
+      expect(categories).toHaveTextContent('buoy')
+      expect(categories).toHaveTextContent('mooring')
+
+      await user.selectOptions(colorBy, '')
+
+      expect(screen.queryByRole('group', { name: /legend/i })).not.toBeInTheDocument()
+      expect(screen.getByTestId('layer').getAttribute('data-color')).toBe('"#4f46e5"')
+    })
+
+    it('keeps the legend of the whole layer while a filter shows only some points', async () => {
+      useImportSession.setState({ filter: { property: 'type', value: 'buoy' } })
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layerWithProperties(rows, ['type', 'depth_m'])),
+        '/api/v1/map-layers/layer-1?property=type&value=buoy': () => {
+          const whole = layerWithProperties(rows, ['type', 'depth_m'])
+          return json({
+            ...whole,
+            features: { ...whole.features, features: whole.features.features.slice(0, 1) },
+          })
+        },
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      await screen.findByText('good · showing 1 of 3 points')
+      const colorBy = screen.getByLabelText('Colour by')
+      await vi.waitFor(() => {
+        expect(colorBy).toBeEnabled()
+      })
+
+      await user.selectOptions(colorBy, 'type')
+
+      expect(screen.getByTestId('source')).toHaveAttribute('data-count', '1')
+      expect(screen.getByRole('group', { name: 'Legend for type' })).toHaveTextContent('mooring')
+    })
+
+    it('says so when no point has a value for the chosen property', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layerWithProperties([{ a: '1' }], ['a', 'b'])),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      const colorBy = await screen.findByLabelText('Colour by')
+      await vi.waitFor(() => {
+        expect(colorBy).toBeEnabled()
+      })
+
+      await user.selectOptions(colorBy, 'b')
+
+      expect(screen.getByText('No points have a value for b.')).toBeInTheDocument()
+    })
+
+    it('explains that a column with too many distinct values cannot be coloured', async () => {
+      const unique = Array.from({ length: 8 }, (_, i) => ({ name: `S-${String(i)}` }))
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layerWithProperties(unique, ['name'])),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      const colorBy = await screen.findByLabelText('Colour by')
+      await vi.waitFor(() => {
+        expect(colorBy).toBeEnabled()
+      })
+
+      await user.selectOptions(colorBy, 'name')
+
+      expect(screen.getByText(/8 different values, too many to colour/)).toBeInTheDocument()
+      expect(screen.queryByRole('group', { name: /legend/i })).not.toBeInTheDocument()
+      expect(screen.getByTestId('layer').getAttribute('data-color')).toBe('"#4f46e5"')
+    })
+  })
+
+  describe('size and labels', () => {
+    const rows = [
+      { name: 'S-1', type: 'buoy', depth_m: '8' },
+      { name: 'S-2', type: 'mooring', depth_m: '40' },
+    ]
+    const stub = () =>
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () =>
+          json(layerWithProperties(rows, ['name', 'type', 'depth_m'])),
+      })
+
+    it('offers only numeric columns for size and scales the points by the choice', async () => {
+      stub()
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      const sizeBy = await screen.findByLabelText('Size by')
+
+      expect(
+        within(sizeBy)
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['None', 'depth_m'])
+      expect(screen.getByTestId('layer').getAttribute('data-radius')).toBe('7')
+
+      await user.selectOptions(sizeBy, 'depth_m')
+
+      expect(screen.getByTestId('layer').getAttribute('data-radius')).toContain('interpolate')
+      const legend = screen.getByRole('group', { name: 'Size legend for depth_m' })
+      expect(legend).toHaveTextContent('8')
+      expect(legend).toHaveTextContent('40')
+
+      await user.selectOptions(sizeBy, '')
+
+      expect(screen.getByTestId('layer').getAttribute('data-radius')).toBe('7')
+      expect(screen.queryByRole('group', { name: /size legend/i })).not.toBeInTheDocument()
+    })
+
+    it('hides the size control when no column is numeric', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layerWithProperties([{ type: 'buoy' }], ['type'])),
+      })
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      await screen.findByLabelText('Colour by')
+      await vi.waitFor(() => {
+        expect(screen.getByLabelText('Colour by')).toBeEnabled()
+      })
+
+      expect(screen.queryByLabelText('Size by')).not.toBeInTheDocument()
+    })
+
+    it('adds a label layer for the chosen property and removes it again', async () => {
+      stub()
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      const labelBy = await screen.findByLabelText('Label by')
+      expect(screen.queryByTestId('layer-labels')).not.toBeInTheDocument()
+
+      await user.selectOptions(labelBy, 'name')
+
+      expect(screen.getByTestId('layer-labels').getAttribute('data-label')).toContain('name')
+
+      await user.selectOptions(labelBy, '')
+
+      expect(screen.queryByTestId('layer-labels')).not.toBeInTheDocument()
+    })
   })
 })

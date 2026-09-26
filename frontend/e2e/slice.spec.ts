@@ -125,6 +125,62 @@ test('a CSV upload becomes a layer that can be filtered', async ({ page }) => {
   await expect(page.getByText(`${stem} · showing 2 of 5 points`)).toBeVisible()
 })
 
+test('colouring by a property shows a legend and keeps it while filtering', async ({ page }) => {
+  const name = uniqueName('colour', 'csv')
+  const stem = stemOf(name)
+
+  await upload(page, 'survey-points.csv', name)
+  await expect(page.getByText(`${stem} · 5 points`)).toBeVisible()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+
+  await page.getByLabel('Colour by').selectOption('type')
+  await expect(page.getByRole('group', { name: 'Legend for type' })).toContainText('buoy')
+
+  await page.getByLabel('Property').selectOption('type')
+  await page.getByLabel('Equals').fill('buoy')
+  await page.getByRole('button', { name: 'Apply filter' }).click()
+  await expect(page.getByText(`${stem} · showing 2 of 5 points`)).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Legend for type' })).toContainText('mooring')
+})
+
+test('sizing points by a number draws without map errors and shows a size legend', async ({
+  page,
+}) => {
+  const problems = watchBrowserHealth(page)
+  const name = uniqueName('size', 'csv')
+
+  await upload(page, 'survey-points.csv', name)
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+
+  await page.getByLabel('Size by').selectOption('depth_m')
+  await expect(page.getByRole('group', { name: 'Size legend for depth_m' })).toBeVisible()
+  await page.getByLabel('Colour by').selectOption('type')
+  await expect(page.getByRole('group', { name: 'Legend for type' })).toBeVisible()
+  // Ready again means the map redrew with the data-driven radius and colour and went idle.
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+  expect(problems).toEqual([])
+})
+
+test('clicking a point shows its properties', async ({ page }) => {
+  const name = uniqueName('popup', 'csv')
+  await page.locator('input[type=file]').setInputFiles({
+    name,
+    mimeType: 'text/csv',
+    buffer: Buffer.from('name,lat,lon,depth_m\nS-777,52.4,4.5,8.6\n'),
+  })
+  await page.getByRole('button', { name: 'Upload' }).click()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+
+  // A single point fits to the middle of the map, so the middle of the canvas is on the point.
+  const canvas = page.locator('canvas.maplibregl-canvas')
+  const box = await canvas.boundingBox()
+  if (!box) throw new Error('map canvas has no box')
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+
+  await expect(page.locator('.maplibregl-popup')).toContainText('S-777')
+  await expect(page.locator('.maplibregl-popup')).toContainText('8.6')
+})
+
 test('an invalid CSV reports spreadsheet row numbers', async ({ page }) => {
   await upload(page, 'bad-rows.csv', uniqueName('badcsv', 'csv'))
 
