@@ -48,6 +48,10 @@ Backend tests run against a real PostGIS database (`layerline_test`, recreated e
 - Every async view has tests for loading, error, empty, and success states.
 - Query by role/label/text, as a user would.
 - Map rendering is tested at the boundary (data passed to the map component); pixel output is not asserted.
+- Zustand stores are module-level singletons, so state leaks between tests. Reset every store a test touches in `beforeEach`.
+- Every user-facing input has a test for the failing-request path, and the user must be able to recover from it (e.g. clear a filter that makes the request fail).
+- A guard whose only job is to prevent a wrong-but-plausible result (e.g. showing another layer's data while loading) needs a test that fails when the guard is removed. Check by breaking it once.
+- jsdom has no WebGL, workers, or real bundling. Behaviour that depends on them (the map, its worker) is only verified in a real browser: drive Chrome with a throwaway script until an end-to-end test exists, and do not report it as verified from unit tests.
 
 ## Migration safety
 

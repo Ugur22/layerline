@@ -30,6 +30,7 @@ Stop for approval before: changing a public contract, adding a migration, adding
 
 - Run applicable checks from `docs/quality.md`; run new tests and see them fail before they pass where practical.
 - For UI or flow changes, exercise the feature, not just the tests; if it cannot be exercised, say so.
+- Before debugging a "still broken" report, check the thing being run is current: dev server or container start time versus the last change (`lsof -iTCP:<port>`, `docker compose ps`), and restart it.
 - Report exact commands and results. Failures and skips are reported, never hidden.
 
 ## 5. Assess and report risks

@@ -4,7 +4,7 @@ Layerline is a spatial-data operations platform: users upload GeoJSON/CSV survey
 
 ## Current phase
 
-**Phase 1 — backend first slice.** The backend (FastAPI, PostGIS, Procrastinate worker, Compose) implements upload → import job → map layer. The frontend is not started. Docs in `docs/architecture.md` and `docs/api-contracts.md` mark what is decided; anything still labelled Assumption or Open is not a fact about the codebase.
+**Phase 1 — first vertical slice.** Backend (FastAPI, PostGIS, Procrastinate worker, Compose) and frontend (React, MapLibre) implement upload → import job → imports list → map layer with a property filter. No end-to-end test or CI yet. Docs in `docs/architecture.md` and `docs/api-contracts.md` mark what is decided; anything still labelled Assumption or Open is not a fact about the codebase.
 
 ## Docs index (read only what your task needs)
 
@@ -49,7 +49,7 @@ Docs mark statements as **Decided**, **Assumption**, or **Open**. Never promote 
 4. **Assess** — review the diff against the acceptance criteria as a skeptic (use the `quality-review` skill); list residual risks and anything unverified.
 5. **Codify learning** — if the task exposed a *repeatable* lesson, capture it (see below). Otherwise capture nothing.
 
-Details and checklists: `docs/agent-workflow.md`.
+Start bounded feature work with the `feature-delivery` skill and run `quality-review` before reporting done; both are part of the loop, not optional. Details and checklists: `docs/agent-workflow.md`.
 
 ## Where lessons go
 
