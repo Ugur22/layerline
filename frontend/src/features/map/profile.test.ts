@@ -1,15 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PointFeature } from '@/api/types'
-import {
-  areaPath,
-  indexAtX,
-  linePath,
-  niceTicks,
-  profileDomain,
-  runsOf,
-  valuesFor,
-  extentOf,
-} from './profile'
+import { extentOf, indexAtX, niceTicks, profileDomain, runsOf, valuesFor } from './profile'
 
 function feature(properties: Record<string, unknown>): PointFeature {
   return { type: 'Feature', id: 'x', geometry: { type: 'Point', coordinates: [4, 52] }, properties }
@@ -112,44 +103,6 @@ describe('runsOf', () => {
   })
 })
 
-describe('linePath', () => {
-  it('joins the points with straight segments', () => {
-    expect(
-      linePath([
-        [0, 1],
-        [2, 3],
-        [4, 5],
-      ]),
-    ).toBe('M0 1L2 3L4 5')
-  })
-
-  it('lifts the pen over gaps instead of drawing through them', () => {
-    expect(linePath([[0, 1], null, [4, 5], [6, 7]])).toBe('M0 1M4 5L6 7')
-  })
-
-  it('draws nothing without points', () => {
-    expect(linePath([null])).toBe('')
-  })
-})
-
-describe('areaPath', () => {
-  it('fills between the line and the baseline', () => {
-    expect(
-      areaPath(
-        [
-          [0, 5],
-          [2, 7],
-        ],
-        0,
-      ),
-    ).toBe('M0 0L0 5L2 7L2 0Z')
-  })
-
-  it('closes each stretch of points separately, skipping the gaps', () => {
-    expect(areaPath([[0, 5], null, [4, 6], [6, 7]], 0)).toBe('M0 0L0 5L0 0ZM4 0L4 6L6 7L6 0Z')
-  })
-})
-
 describe('indexAtX', () => {
   // Four columns of 10 starting at x = 20.
   const layout = { left: 20, width: 40, count: 4 }
@@ -165,7 +118,8 @@ describe('indexAtX', () => {
     expect(indexAtX(60.1, layout)).toBeNull()
   })
 
-  it('has no column when there are no points', () => {
+  it('has no column when there are no points or no room', () => {
     expect(indexAtX(30, { left: 20, width: 40, count: 0 })).toBeNull()
+    expect(indexAtX(30, { left: 20, width: 0, count: 4 })).toBeNull()
   })
 })

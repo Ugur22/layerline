@@ -66,47 +66,11 @@ export function runsOf(labels: readonly (string | null)[]): Run[] {
   return runs
 }
 
-export function linePath(points: readonly ([number, number] | null)[]): string {
-  let path = ''
-  let penDown = false
-  for (const point of points) {
-    if (point === null) {
-      penDown = false
-      continue
-    }
-    path += `${penDown ? 'L' : 'M'}${String(point[0])} ${String(point[1])}`
-    penDown = true
-  }
-  return path
-}
-
-// The filled shape between a line and its baseline, one closed shape per stretch of points.
-export function areaPath(points: readonly ([number, number] | null)[], baseline: number): string {
-  let path = ''
-  let stretch: [number, number][] = []
-  const close = () => {
-    const first = stretch[0]
-    const last = stretch.at(-1)
-    if (first && last) {
-      path += `M${String(first[0])} ${String(baseline)}`
-      for (const [x, y] of stretch) path += `L${String(x)} ${String(y)}`
-      path += `L${String(last[0])} ${String(baseline)}Z`
-    }
-    stretch = []
-  }
-  for (const point of points) {
-    if (point === null) close()
-    else stretch.push(point)
-  }
-  close()
-  return path
-}
-
 // Which of `count` equal columns, spanning `width` from `left`, an x position falls in.
 export function indexAtX(
   x: number,
   { left, width, count }: { left: number; width: number; count: number },
 ): number | null {
-  if (count === 0 || x < left || x > left + width) return null
+  if (count === 0 || width <= 0 || x < left || x > left + width) return null
   return Math.min(count - 1, Math.floor(((x - left) / width) * count))
 }

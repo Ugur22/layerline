@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { FIT_PADDING } from '../src/features/map/fitPadding.js'
+import { PROFILE_MARGIN, PROFILE_Y_AXIS_WIDTH } from '../src/features/map/profileLayout.js'
 
 // A lone point is fitted to the middle of the padded view, so it sits off the canvas middle by half
 // the difference between the top and bottom padding.
@@ -410,13 +411,15 @@ test('pointing at the depth profile shows that point on the map side and pins it
   await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
   await expect(page.getByText('depth_m along the file order')).toBeVisible()
 
-  const surface = page.getByTestId('profile-surface')
+  const chart = page.locator('.recharts-wrapper')
   // The chart sits below the map, so it may be off screen and the mouse can only reach what shows.
-  await surface.scrollIntoViewIfNeeded()
-  const box = await surface.boundingBox()
+  await chart.scrollIntoViewIfNeeded()
+  const box = await chart.boundingBox()
   if (!box) throw new Error('profile has no box')
   const inspector = page.getByRole('region', { name: 'Point inspector' })
-  const column = (index: number) => box.x + (box.width * (index + 0.5)) / 3
+  // The plot starts after the value axis and stops short of the right edge.
+  const plotWidth = box.width - PROFILE_Y_AXIS_WIDTH - PROFILE_MARGIN.right
+  const column = (index: number) => box.x + PROFILE_Y_AXIS_WIDTH + (plotWidth * (index + 0.5)) / 3
   const middle = box.y + box.height / 2
 
   await page.mouse.move(column(1), middle)
