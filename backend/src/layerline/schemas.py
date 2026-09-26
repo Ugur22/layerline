@@ -51,6 +51,10 @@ class ImportJobListResponse(BaseModel):
     next_cursor: str | None
 
 
+class ClearImportsResponse(BaseModel):
+    deleted: int
+
+
 class MapLayerOut(BaseModel):
     id: uuid.UUID
     dataset_id: uuid.UUID

@@ -124,6 +124,18 @@ Notes:
 - This list is how clients discover a dataset's map layers (`map_layer_id` on succeeded jobs); there is no separate map-layer list endpoint.
 - Errors: `400 validation_failed`, `404 not_found` (dataset missing or in another organisation).
 
+## 5. Clear a dataset's imports
+
+`DELETE /api/v1/datasets/{dataset_id}/imports`
+
+`200 OK`: `{ "deleted": 3 }`
+
+- Permanently deletes every **finished** import (`succeeded` or `failed`) of the dataset, together with its map layer, its features and its stored raw file ([ADR 0011](decisions/0011-hard-delete-of-imports.md)). There is no undo.
+- Imports still `queued` or `processing` are kept: a worker may be writing to them. `deleted` counts only what was removed, so a client can tell nothing was removed.
+- Idempotent: with nothing to delete it returns `{ "deleted": 0 }`.
+- Not audited yet: the audit-event table does not exist (ADR 0011).
+- Errors: `404 not_found` (dataset missing or in another organisation), `401`/`403`.
+
 ## Open questions
 
 - Should upload and layer retrieval be addressable by dataset instead of opaque job/layer ids?

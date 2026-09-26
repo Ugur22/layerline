@@ -1,9 +1,12 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { match } from 'ts-pattern'
+import { clearImports } from '@/api/imports'
 import type { ImportJob } from '@/api/types'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DEV_DATASET_ID } from '@/config'
 import { useImportSession } from './importSession'
 import { useImportList } from './useImportList'
@@ -21,13 +24,73 @@ export function ImportsList({ pollIntervalMs = 1000 }: { pollIntervalMs?: number
   const { jobId, setJobId } = useImportSession()
   const list = useImportList(DEV_DATASET_ID, pollIntervalMs)
   const jobs = list.data?.pages.flatMap((page) => page.import_jobs) ?? []
+  const queryClient = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+  const clear = useMutation({
+    mutationFn: () => clearImports(DEV_DATASET_ID),
+    onSuccess: async () => {
+      // The selected import may be gone, and a request for it would only 404.
+      setJobId(null)
+      setConfirming(false)
+      await queryClient.invalidateQueries({ queryKey: ['imports', DEV_DATASET_ID] })
+    },
+  })
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Imports</CardTitle>
+        {jobs.length > 0 && !confirming && (
+          <CardAction>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                clear.reset()
+                setConfirming(true)
+              }}
+            >
+              Clear imports
+            </Button>
+          </CardAction>
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
+        {confirming && (
+          <Alert variant="destructive">
+            <AlertDescription className="flex flex-col items-start gap-2">
+              Permanently delete all finished imports and their map layers? This cannot be undone.
+              Imports that are still processing are kept.
+              <span className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={clear.isPending}
+                  onClick={() => {
+                    clear.mutate()
+                  }}
+                >
+                  {clear.isPending ? 'Deleting…' : 'Delete'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={clear.isPending}
+                  onClick={() => {
+                    setConfirming(false)
+                  }}
+                >
+                  Cancel
+                </Button>
+              </span>
+            </AlertDescription>
+          </Alert>
+        )}
+        {clear.isError && (
+          <Alert variant="destructive">
+            <AlertDescription>{clear.error.message}</AlertDescription>
+          </Alert>
+        )}
         {list.isPending && <p className="text-sm text-muted-foreground">Loading imports…</p>}
         {list.isError && (
           <Alert variant="destructive">

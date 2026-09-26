@@ -136,4 +136,84 @@ describe('ImportsList', () => {
       await screen.findByText(/could not load imports: dataset not found/i),
     ).toBeInTheDocument()
   })
+
+  describe('clearing imports', () => {
+    // Serves the list until a DELETE succeeds, then an empty one, like the real API would.
+    function mockClearable(deleteResponse: () => Response) {
+      let cleared = false
+      const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+        if (url === LIST_URL && init?.method === 'DELETE') {
+          const response = deleteResponse()
+          cleared = response.ok
+          return Promise.resolve(response)
+        }
+        return Promise.resolve(json(page(cleared ? [] : [job('a'), job('b')])))
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      return fetchMock
+    }
+    const deletes = (fetchMock: ReturnType<typeof mockClearable>) =>
+      fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')
+
+    it('offers no clear button when there is nothing to clear', async () => {
+      mockList({ [LIST_URL]: [json(page([]))] })
+      renderWithClient(<ImportsList pollIntervalMs={POLL_MS} />)
+
+      await screen.findByText(/no imports yet/i)
+
+      expect(screen.queryByRole('button', { name: /clear imports/i })).not.toBeInTheDocument()
+    })
+
+    it('asks for confirmation and deletes nothing until it is given', async () => {
+      const fetchMock = mockClearable(() => json({ deleted: 2 }))
+      const user = userEvent.setup()
+      renderWithClient(<ImportsList pollIntervalMs={POLL_MS} />)
+      await screen.findByRole('button', { name: /a\.geojson/ })
+
+      await user.click(screen.getByRole('button', { name: /clear imports/i }))
+
+      expect(screen.getByText(/permanently delete/i)).toBeInTheDocument()
+      expect(deletes(fetchMock)).toHaveLength(0)
+
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+      expect(screen.queryByText(/permanently delete/i)).not.toBeInTheDocument()
+      expect(deletes(fetchMock)).toHaveLength(0)
+      expect(screen.getByRole('button', { name: /a\.geojson/ })).toBeInTheDocument()
+    })
+
+    it('deletes on confirmation, empties the list and drops the selected import', async () => {
+      useImportSession.setState({ jobId: 'a', filter: { property: 'name', value: 'A' } })
+      const fetchMock = mockClearable(() => json({ deleted: 2 }))
+      const user = userEvent.setup()
+      renderWithClient(<ImportsList pollIntervalMs={POLL_MS} />)
+      await screen.findByRole('button', { name: /a\.geojson/ })
+
+      await user.click(screen.getByRole('button', { name: /clear imports/i }))
+      await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+      expect(await screen.findByText(/no imports yet/i)).toBeInTheDocument()
+      expect(deletes(fetchMock)).toHaveLength(1)
+      expect(useImportSession.getState()).toMatchObject({ jobId: null, filter: null })
+      expect(screen.queryByText(/permanently delete/i)).not.toBeInTheDocument()
+    })
+
+    it('keeps the list and the selection when the delete fails, and allows retrying', async () => {
+      useImportSession.setState({ jobId: 'a' })
+      mockClearable(() =>
+        json({ error: { code: 'internal', message: 'Database is busy.', details: [] } }, 500),
+      )
+      const user = userEvent.setup()
+      renderWithClient(<ImportsList pollIntervalMs={POLL_MS} />)
+      await screen.findByRole('button', { name: /a\.geojson/ })
+
+      await user.click(screen.getByRole('button', { name: /clear imports/i }))
+      await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+      expect(await screen.findByText('Database is busy.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /a\.geojson/ })).toBeInTheDocument()
+      expect(useImportSession.getState().jobId).toBe('a')
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled()
+    })
+  })
 })

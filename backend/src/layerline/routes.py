@@ -6,7 +6,7 @@ from pathlib import PurePath
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, UploadFile
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from layerline.config import get_settings
@@ -16,6 +16,7 @@ from layerline.errors import ApiError
 from layerline.jobs import enqueue_import
 from layerline.models import Dataset, ImportJob, MapLayer, SpatialFeature
 from layerline.schemas import (
+    ClearImportsResponse,
     ErrorResponse,
     Health,
     ImportJobListResponse,
@@ -178,6 +179,48 @@ async def list_imports(
         # A next page exists only if the extra probe row came back.
         next_cursor=_encode_cursor(page[-1][0]) if len(rows) > limit else None,
     )
+
+
+@router.delete("/datasets/{dataset_id}/imports", responses=ERRORS)
+async def clear_imports(
+    dataset_id: uuid.UUID, ctx: Ctx, session: Session, storage: Storage
+) -> ClearImportsResponse:
+    dataset = (
+        await session.execute(
+            select(Dataset.id).where(
+                Dataset.id == dataset_id, Dataset.organisation_id == ctx.organisation_id
+            )
+        )
+    ).scalar_one_or_none()
+    if dataset is None:
+        raise _not_found("Dataset")
+
+    # Unfinished imports stay: a worker may still be writing features for them (ADR 0011). The row
+    # lock keeps a concurrent clear from racing this one.
+    finished = (
+        await session.execute(
+            select(ImportJob.id, ImportJob.stored_path)
+            .where(
+                ImportJob.dataset_id == dataset_id,
+                ImportJob.organisation_id == ctx.organisation_id,
+                ImportJob.status.in_(("succeeded", "failed")),
+            )
+            .with_for_update()
+        )
+    ).all()
+    job_ids = [row[0] for row in finished]
+    if job_ids:
+        await session.execute(
+            delete(SpatialFeature).where(SpatialFeature.import_job_id.in_(job_ids))
+        )
+        await session.execute(delete(MapLayer).where(MapLayer.import_job_id.in_(job_ids)))
+        await session.execute(delete(ImportJob).where(ImportJob.id.in_(job_ids)))
+        await session.commit()
+
+    # After the commit, best effort: a leftover file is harmless, a row whose file is gone is not.
+    for _, stored_path in finished:
+        storage.delete(stored_path)
+    return ClearImportsResponse(deleted=len(job_ids))
 
 
 @router.get("/imports/{import_job_id}", responses=ERRORS)

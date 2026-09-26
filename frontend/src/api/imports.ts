@@ -52,6 +52,12 @@ export function listImports(datasetId: string, cursor?: string | null): Promise<
   return requestJson<ImportJobList>(`/api/v1/datasets/${datasetId}/imports${query}`)
 }
 
+export function clearImports(datasetId: string): Promise<{ deleted: number }> {
+  return requestJson<{ deleted: number }>(`/api/v1/datasets/${datasetId}/imports`, {
+    method: 'DELETE',
+  })
+}
+
 export function getMapLayer(
   mapLayerId: string,
   filter?: LayerFilter | null,

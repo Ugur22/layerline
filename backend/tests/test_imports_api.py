@@ -1,5 +1,6 @@
 import json
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 import httpx2
@@ -336,3 +337,82 @@ async def test_data_the_database_cannot_store_fails_the_job_instead_of_hanging(
     assert job["status"] == "failed"
     assert job["errors"][0]["code"] == "invalid_data"
     assert run_sql("SELECT count(*) FROM spatial_features") == [(0,)]
+
+
+async def test_clearing_imports_removes_finished_ones_with_their_layers_and_files(
+    client: httpx2.AsyncClient, storage_dir: Path
+) -> None:
+    good = await upload(client, geojson([4.9, 52.37], [4.95, 52.4]))
+    bad = await upload(client, geojson([1, 2], [999, 2]))
+    await process_queue()
+    paths = [row[0] for row in run_sql("SELECT stored_path FROM import_jobs")]
+    assert len(paths) == 2
+    assert all((storage_dir / path).exists() for path in paths)
+    layer_id = (await status(client, good))["map_layer_id"]
+
+    response = await client.delete(UPLOAD)
+
+    assert response.status_code == 200
+    assert response.json() == {"deleted": 2}
+    for table in ("import_jobs", "map_layers", "spatial_features"):
+        assert run_sql(f"SELECT count(*) FROM {table}") == [(0,)]  # noqa: S608
+    assert not any((storage_dir / path).exists() for path in paths)
+    listing = (await client.get(UPLOAD)).json()
+    assert listing["import_jobs"] == []
+    assert (await client.get(f"/api/v1/imports/{bad}")).status_code == 404
+    assert (await client.get(f"/api/v1/map-layers/{layer_id}")).status_code == 404
+
+
+async def test_clearing_imports_keeps_the_ones_still_running(client: httpx2.AsyncClient) -> None:
+    finished = await upload(client, geojson([4.9, 52.37]))
+    await process_queue()
+    queued = await upload(client, geojson([4.9, 52.37]))
+    processing = await upload(client, geojson([4.9, 52.37]))
+    run_sql("UPDATE import_jobs SET status = 'processing' WHERE id = %s", (processing,))
+
+    response = await client.delete(UPLOAD)
+
+    assert response.json() == {"deleted": 1}
+    assert (await client.get(f"/api/v1/imports/{finished}")).status_code == 404
+    assert (await status(client, queued))["status"] == "queued"
+    assert (await status(client, processing))["status"] == "processing"
+
+
+async def test_clearing_nothing_is_not_an_error(client: httpx2.AsyncClient) -> None:
+    first = await client.delete(UPLOAD)
+    second = await client.delete(UPLOAD)
+
+    assert first.status_code == second.status_code == 200
+    assert first.json() == second.json() == {"deleted": 0}
+
+
+async def test_clearing_imports_of_another_organisation_is_not_found_and_deletes_nothing(
+    client: httpx2.AsyncClient,
+) -> None:
+    job_id = await upload(client, geojson([4.9, 52.37]))
+    await process_queue()
+
+    response = await client.delete(UPLOAD, headers=OTHER_ORG)
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+    assert (await status(client, job_id))["status"] == "succeeded"
+
+
+async def test_clearing_an_unknown_dataset_is_not_found(client: httpx2.AsyncClient) -> None:
+    response = await client.delete("/api/v1/datasets/00000000-0000-4000-8000-0000000000ff/imports")
+
+    assert response.status_code == 404
+
+
+async def test_a_missing_raw_file_does_not_stop_the_clear(
+    client: httpx2.AsyncClient, storage_dir: Path
+) -> None:
+    await upload(client, geojson([4.9, 52.37]))
+    await process_queue()
+    path = run_sql("SELECT stored_path FROM import_jobs")[0][0]
+    (storage_dir / path).unlink()
+
+    response = await client.delete(UPLOAD)
+
+    assert response.json() == {"deleted": 1}
