@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useImportSession } from '@/features/imports/importSession'
 import { useImportJob } from '@/features/imports/useImportJob'
@@ -10,7 +11,7 @@ import { useMapLayer } from './useMapLayer'
 const LayerMap = lazy(() => import('./LayerMap').then((m) => ({ default: m.LayerMap })))
 
 export function MapPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number }) {
-  const { jobId, filter } = useImportSession()
+  const { jobId, filter, setFilter } = useImportSession()
   const layerId = useImportJob(jobId, pollIntervalMs).data?.map_layer_id
   const layer = useMapLayer(layerId, filter)
 
@@ -34,7 +35,21 @@ export function MapPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number })
         {layer.isPending && <p className="text-sm text-muted-foreground">Loading map layer…</p>}
         {layer.isError && (
           <Alert variant="destructive">
-            <AlertDescription>Could not load the map layer: {layer.error.message}</AlertDescription>
+            <AlertDescription className="flex flex-col items-start gap-2">
+              Could not load the map layer: {layer.error.message}
+              {/* Without data there is no filter bar, so a failing filter needs its own way out. */}
+              {filter && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setFilter(null)
+                  }}
+                >
+                  Clear filter
+                </Button>
+              )}
+            </AlertDescription>
           </Alert>
         )}
         {layer.data && (

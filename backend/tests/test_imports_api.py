@@ -135,7 +135,7 @@ async def test_openapi_describes_real_responses(client: httpx2.AsyncClient) -> N
     assert job["properties"]["status"]["enum"] == ["queued", "processing", "succeeded", "failed"]
 
 
-def geojson_with_properties(*items: tuple[list[float], dict[str, Any]]) -> bytes:
+def geojson_with_properties(*items: tuple[list[float], dict[str, Any] | None]) -> bytes:
     features = [
         {"type": "Feature", "geometry": {"type": "Point", "coordinates": c}, "properties": p}
         for c, p in items
@@ -244,9 +244,24 @@ async def test_layer_filter_validates_input_and_treats_keys_as_data(
     assert response.json()["features"]["features"] == []
 
 
-async def test_layer_without_properties_has_no_property_keys(client: httpx2.AsyncClient) -> None:
-    layer_id = await imported_layer_id(client, geojson([1, 2]))
+async def test_property_keys_list_what_the_filter_can_use(client: httpx2.AsyncClient) -> None:
+    long_key = "k" * 101
+    layer_id = await imported_layer_id(
+        client, geojson_with_properties(([1, 1], {"b": 1, "a": 2, long_key: 3}))
+    )
 
     body = (await client.get(f"/api/v1/map-layers/{layer_id}")).json()
 
-    assert body["map_layer"]["property_keys"] == ["i"]
+    # Sorted, and without keys too long for the `property` parameter.
+    assert body["map_layer"]["property_keys"] == ["a", "b"]
+
+
+async def test_layer_with_null_properties_has_no_property_keys(
+    client: httpx2.AsyncClient,
+) -> None:
+    layer_id = await imported_layer_id(client, geojson_with_properties(([1, 1], None)))
+
+    body = (await client.get(f"/api/v1/map-layers/{layer_id}")).json()
+
+    assert body["map_layer"]["property_keys"] == []
+    assert len(body["features"]["features"]) == 1

@@ -57,6 +57,10 @@ def _job_out(job: ImportJob, map_layer_id: uuid.UUID | None) -> ImportJobOut:
 
 
 MAX_PROPERTY_KEYS = 50
+# Filterable property names must fit the `property` query parameter, or the UI would offer a
+# filter the API then rejects.
+MAX_PROPERTY_NAME = 100
+MAX_FILTER_VALUE = 500
 
 
 def _encode_cursor(job: ImportJob) -> str:
@@ -182,10 +186,12 @@ async def get_map_layer(
     map_layer_id: uuid.UUID,
     ctx: Ctx,
     session: Session,
-    property: Annotated[str | None, Query(max_length=100)] = None,  # noqa: A002
-    value: Annotated[str | None, Query(max_length=500)] = None,
+    property_name: Annotated[
+        str | None, Query(alias="property", max_length=MAX_PROPERTY_NAME)
+    ] = None,
+    value: Annotated[str | None, Query(max_length=MAX_FILTER_VALUE)] = None,
 ) -> MapLayerResponse:
-    if (property is None) != (value is None):
+    if (property_name is None) != (value is None):
         raise ApiError(400, "validation_failed", "`property` and `value` must be given together.")
     layer = (
         await session.execute(
@@ -221,17 +227,24 @@ async def get_map_layer(
         .where(*scope)
         .order_by(SpatialFeature.id)
     )
-    if property is not None and value is not None:
+    if property_name is not None and value is not None:
         # Bound parameters on both sides: the key is data, never part of the SQL text.
-        features_query = features_query.where(SpatialFeature.properties[property].astext == value)
+        features_query = features_query.where(
+            SpatialFeature.properties[property_name].astext == value
+        )
     rows = (await session.execute(features_query)).all()
+    all_keys = (
+        select(func.jsonb_object_keys(SpatialFeature.properties).label("key"))
+        .where(*scope)
+        .subquery()
+    )
     property_keys: list[str] = list(
         (
             await session.execute(
-                select(func.jsonb_object_keys(SpatialFeature.properties).label("key"))
-                .where(*scope)
+                select(all_keys.c.key)
+                .where(func.length(all_keys.c.key) <= MAX_PROPERTY_NAME)
                 .distinct()
-                .order_by("key")
+                .order_by(all_keys.c.key)
                 .limit(MAX_PROPERTY_KEYS)
             )
         )

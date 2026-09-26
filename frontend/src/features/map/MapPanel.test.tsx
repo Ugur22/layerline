@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { act, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ImportJob, MapLayerResponse } from '@/api/types'
@@ -237,5 +237,96 @@ describe('MapPanel', () => {
 
     expect(await screen.findByText(/no properties to filter/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Apply filter' })).not.toBeInTheDocument()
+  })
+
+  it('lets the user clear a filter whose request failed', async () => {
+    mockApi({
+      '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+      '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.95, 52.4])),
+      '/api/v1/map-layers/layer-1?property=name&value=A': () =>
+        json({ error: { code: 'validation_failed', message: 'Too long.', details: [] } }, 400),
+    })
+    const user = userEvent.setup()
+    renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+    await screen.findByText('good · 2 points')
+    await user.type(screen.getByLabelText('Equals'), 'A')
+    await user.click(screen.getByRole('button', { name: 'Apply filter' }))
+    expect(await screen.findByText(/could not load the map layer: too long/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Clear filter' }))
+
+    expect(await screen.findByText('good · 2 points')).toBeInTheDocument()
+    expect(useImportSession.getState().filter).toBeNull()
+  })
+
+  it("never shows another layer's points while a newly selected layer loads", async () => {
+    let releaseSecond: (response: Response) => void = () => undefined
+    const secondLayer = new Promise<Response>((resolve) => {
+      releaseSecond = resolve
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/v1/imports/job-1') return Promise.resolve(json({ import_job: job({}) }))
+        if (url === '/api/v1/imports/job-2')
+          return Promise.resolve(
+            json({ import_job: job({ id: 'job-2', map_layer_id: 'layer-2' }) }),
+          )
+        if (url === '/api/v1/map-layers/layer-1')
+          return Promise.resolve(json(layer([4.9, 52.37, 4.95, 52.4])))
+        return secondLayer
+      }),
+    )
+    renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+    await screen.findByText('good · 2 points')
+
+    act(() => {
+      useImportSession.getState().setJobId('job-2')
+    })
+
+    expect(await screen.findByText('Loading map layer…')).toBeInTheDocument()
+    expect(screen.queryByText('good · 2 points')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('map')).not.toBeInTheDocument()
+
+    releaseSecond(
+      json({
+        ...layer([1, 1, 2, 2]),
+        map_layer: { ...layer(null).map_layer, id: 'layer-2', name: 'second', feature_count: 1 },
+      }),
+    )
+    expect(await screen.findByText('second · 1 points')).toBeInTheDocument()
+  })
+
+  it('limits the filter value to what the API accepts', async () => {
+    mockApi({
+      '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+      '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.95, 52.4])),
+    })
+    renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+
+    await screen.findByText('good · 2 points')
+
+    expect(screen.getByLabelText('Equals')).toHaveAttribute('maxLength', '500')
+  })
+
+  it('sends the filter value exactly as typed, spaces included', async () => {
+    const fetchMock = mockApi({
+      '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+      '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.95, 52.4])),
+      '/api/v1/map-layers/layer-1?property=name&value=+A': () =>
+        json(layer([4.9, 52.37, 4.95, 52.4], ['name'], true)),
+    })
+    const user = userEvent.setup()
+    renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+    await screen.findByText('good · 2 points')
+
+    await user.type(screen.getByLabelText('Equals'), ' A')
+    await user.click(screen.getByRole('button', { name: 'Apply filter' }))
+
+    expect(await screen.findByText('good · showing 1 of 2 points')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/map-layers/layer-1?property=name&value=+A',
+      undefined,
+    )
   })
 })

@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useImportSession } from '@/features/imports/importSession'
 
+// Mirror the API limits (docs/api-contracts.md) so the form cannot build a request it rejects.
+const MAX_VALUE_LENGTH = 500
+
 const CONTROL = 'h-8 rounded-md border bg-background px-2 text-sm'
 
 export function FilterBar({ propertyKeys }: { propertyKeys: string[] }) {
@@ -18,7 +21,8 @@ export function FilterBar({ propertyKeys }: { propertyKeys: string[] }) {
       className="flex flex-wrap items-end gap-2"
       onSubmit={(event) => {
         event.preventDefault()
-        if (value.trim() !== '') setFilter({ property, value })
+        // Exact match, so the value is sent as typed: spaces are significant.
+        if (value !== '') setFilter({ property, value })
       }}
     >
       <label className="flex flex-col gap-1 text-xs">
@@ -41,13 +45,14 @@ export function FilterBar({ propertyKeys }: { propertyKeys: string[] }) {
         Equals
         <input
           className={CONTROL}
+          maxLength={MAX_VALUE_LENGTH}
           value={value}
           onChange={(event) => {
             setValue(event.target.value)
           }}
         />
       </label>
-      <Button type="submit" size="sm" disabled={value.trim() === ''}>
+      <Button type="submit" size="sm" disabled={value === ''}>
         Apply filter
       </Button>
       {filter && (
