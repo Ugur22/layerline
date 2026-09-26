@@ -121,3 +121,13 @@ async def test_placeholder_identity_is_refused_outside_development(
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "unauthorized"
+
+
+async def test_openapi_describes_real_responses(client: httpx2.AsyncClient) -> None:
+    schema = (await client.get("/openapi.json")).json()
+
+    upload = schema["paths"]["/api/v1/datasets/{dataset_id}/imports"]["post"]["responses"]
+    assert set(upload) == {"202", "400", "401", "404", "413"}
+    assert "HTTPValidationError" not in schema["components"]["schemas"]
+    job = schema["components"]["schemas"]["ImportJobOut"]
+    assert job["properties"]["status"]["enum"] == ["queued", "processing", "succeeded", "failed"]
