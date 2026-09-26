@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { SegmentedControl, SelectControl } from './LayerControls'
+import { SegmentedControl, SelectControl, ToggleControl } from './LayerControls'
 
 describe('SegmentedControl', () => {
   it('offers None and every key as one group, with the current choice selected', () => {
@@ -110,5 +110,30 @@ describe('SelectControl', () => {
 
     expect(onChange).toHaveBeenCalledWith('depth_m')
     expect(screen.getByRole('option', { name: 'None' })).toBeInTheDocument()
+  })
+})
+
+describe('ToggleControl', () => {
+  it('is a button that says whether it is on, and flips when clicked', async () => {
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    render(<ToggleControl label="Track" pressed={false} onChange={onChange} />)
+
+    const button = screen.getByRole('button', { name: 'Track' })
+    expect(button).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(button)
+
+    expect(onChange).toHaveBeenCalledWith(true)
+  })
+
+  it('turns off when clicked while on', async () => {
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    render(<ToggleControl label="Track" pressed onChange={onChange} />)
+
+    await user.click(screen.getByRole('button', { name: 'Track' }))
+
+    expect(onChange).toHaveBeenCalledWith(false)
   })
 })

@@ -308,6 +308,56 @@ test('clicking a legend value hides those points from hover until clicked again'
   expect(problems).toEqual([])
 })
 
+test('the track line draws through the points in file order without map errors', async ({
+  page,
+}) => {
+  const problems = watchBrowserHealth(page)
+  const name = uniqueName('track', 'csv')
+  await page.locator('input[type=file]').setInputFiles({
+    name,
+    mimeType: 'text/csv',
+    buffer: Buffer.from('name,lat,lon\nT-3,52.3,4.5\nT-1,52.4,4.6\nT-2,52.5,4.7\n'),
+  })
+  await page.getByRole('button', { name: 'Upload' }).click()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+
+  const track = page.getByRole('button', { name: 'Track', exact: true })
+  await track.click()
+  await expect(track).toHaveAttribute('aria-pressed', 'true')
+  // Long enough for the draw-in to finish, then idle again means the line rendered.
+  await page.waitForTimeout(2000)
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+  expect(problems).toEqual([])
+})
+
+test('stepping through the points follows the order of the file, not names or ids', async ({
+  page,
+}) => {
+  const problems = watchBrowserHealth(page)
+  const name = uniqueName('steps', 'csv')
+  await page.locator('input[type=file]').setInputFiles({
+    name,
+    mimeType: 'text/csv',
+    buffer: Buffer.from('name,lat,lon\nT-3,52.3,4.5\nT-1,52.4,4.6\nT-2,52.5,4.7\n'),
+  })
+  await page.getByRole('button', { name: 'Upload' }).click()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+
+  const inspector = page.getByRole('region', { name: 'Point inspector' })
+  const next = inspector.getByRole('button', { name: 'Next point' })
+  for (const expected of ['T-3', 'T-1', 'T-2']) {
+    await next.click()
+    await expect(inspector).toContainText(expected)
+  }
+  await expect(inspector).toContainText('3 of 3')
+  await expect(next).toBeDisabled()
+
+  await inspector.getByRole('button', { name: 'Previous point' }).click()
+  await expect(inspector).toContainText('T-1')
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+  expect(problems).toEqual([])
+})
+
 test('an invalid CSV reports spreadsheet row numbers', async ({ page }) => {
   await upload(page, 'bad-rows.csv', uniqueName('badcsv', 'csv'))
 

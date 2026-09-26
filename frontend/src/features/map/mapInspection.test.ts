@@ -4,8 +4,8 @@ import { useMapInspection, type InspectedPoint } from './mapInspection'
 
 const data: PointFeatureCollection = { type: 'FeatureCollection', features: [] }
 
-function point(lon: number, properties: Record<string, unknown> = {}): InspectedPoint {
-  return { data, coordinates: [lon, 52], properties }
+function point(index: number, properties: Record<string, unknown> = {}): InspectedPoint {
+  return { data, index, coordinates: [4 + index, 52], properties }
 }
 
 beforeEach(() => {
@@ -26,7 +26,7 @@ describe('useMapInspection', () => {
     useMapInspection.getState().setHover(point(4))
 
     useMapInspection.getState().setHover(point(5))
-    expect(useMapInspection.getState().hover?.coordinates[0]).toBe(5)
+    expect(useMapInspection.getState().hover?.index).toBe(5)
 
     useMapInspection.getState().setHover(null)
     expect(useMapInspection.getState().hover).toBeNull()

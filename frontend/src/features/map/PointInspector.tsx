@@ -1,21 +1,17 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { PointFeatureCollection } from '@/api/types'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { propertyText } from './layerStyle'
 import { useMapInspection } from './mapInspection'
+import { inspectedPointAt } from './pointLookup'
 
 export function PointInspector({ features }: { features: PointFeatureCollection }) {
   const hover = useMapInspection((state) => state.hover)
   const pinned = useMapInspection((state) => state.pinned)
   const shownPinned = pinned?.data === features ? pinned : null
   // Pointing at the pinned point itself is not a preview of some other point.
-  const shownHover =
-    hover?.data === features &&
-    !(
-      shownPinned?.coordinates[0] === hover.coordinates[0] &&
-      shownPinned.coordinates[1] === hover.coordinates[1]
-    )
-      ? hover
-      : null
+  const shownHover = hover?.data === features && hover.index !== shownPinned?.index ? hover : null
   // Hovering previews another point without losing the pinned one, which returns afterwards.
   const point = shownHover ?? shownPinned
 
@@ -23,6 +19,12 @@ export function PointInspector({ features }: { features: PointFeatureCollection 
     point && typeof point.properties.name === 'string' && point.properties.name !== ''
       ? point.properties.name
       : null
+  const count = features.features.length
+  const setPinned = useMapInspection((state) => state.setPinned)
+  // From nothing pinned, Next starts at the first point and Previous at the last.
+  const from = shownPinned?.index ?? null
+  const previousIndex = from === null ? count - 1 : from - 1
+  const nextIndex = from === null ? 0 : from + 1
   const rows = point
     ? Object.entries(point.properties).filter(([key]) => !(name !== null && key === 'name'))
     : []
@@ -50,6 +52,10 @@ export function PointInspector({ features }: { features: PointFeatureCollection 
                   <dd className="break-words font-medium">{propertyText(value)}</dd>
                 </div>
               ))}
+              <dt className="text-muted-foreground">Position</dt>
+              <dd className="font-medium tabular-nums">
+                {point.index + 1} of {count}
+              </dd>
               <dt className="text-muted-foreground">Coordinates</dt>
               <dd className="font-medium tabular-nums">
                 {point.coordinates[1].toFixed(5)}, {point.coordinates[0].toFixed(5)}
@@ -57,6 +63,31 @@ export function PointInspector({ features }: { features: PointFeatureCollection 
             </dl>
           </div>
         )}
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Previous point"
+            disabled={previousIndex < 0}
+            onClick={() => {
+              setPinned(inspectedPointAt(features, previousIndex))
+            }}
+          >
+            <ChevronLeft />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Next point"
+            disabled={nextIndex >= count}
+            onClick={() => {
+              setPinned(inspectedPointAt(features, nextIndex))
+            }}
+          >
+            <ChevronRight />
+          </Button>
+          Step in file order
+        </div>
       </CardContent>
     </Card>
   )

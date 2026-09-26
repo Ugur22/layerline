@@ -4,6 +4,8 @@ import type { PointFeatureCollection } from '@/api/types'
 export interface InspectedPoint {
   // Tied to the data it came from, so a point a new filter removed stops being shown.
   data: PointFeatureCollection
+  // Position in `data`, which is also the point's position in the uploaded file.
+  index: number
   coordinates: [number, number]
   properties: Record<string, unknown>
 }
@@ -19,11 +21,7 @@ interface MapInspection {
 }
 
 function samePoint(a: InspectedPoint | null, b: InspectedPoint | null) {
-  return (
-    a?.data === b?.data &&
-    a?.coordinates[0] === b?.coordinates[0] &&
-    a?.coordinates[1] === b?.coordinates[1]
-  )
+  return a?.data === b?.data && a?.index === b?.index
 }
 
 export const useMapInspection = create<MapInspection>((set, get) => ({

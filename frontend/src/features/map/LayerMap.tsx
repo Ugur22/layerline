@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import Map, { Layer, Popup, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Map, {
+  Layer,
+  Popup,
+  Source,
+  type MapLayerMouseEvent,
+  type MapRef,
+} from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import './maplibreWorker'
 import type { ExpressionSpecification } from 'maplibre-gl'
@@ -9,7 +15,7 @@ import { boundsFor } from './bounds'
 import { FIT_PADDING } from './fitPadding'
 import { ColorLegend, SizeLegend } from './ColorLegend'
 import { FeatureTooltipContent } from './FeatureTooltipContent'
-import { MAX_SEGMENTED_KEYS, SegmentedControl, SelectControl } from './LayerControls'
+import { MAX_SEGMENTED_KEYS, SegmentedControl, SelectControl, ToggleControl } from './LayerControls'
 import {
   activeHidden,
   buildColorScheme,
@@ -23,9 +29,13 @@ import {
   visibleFilter,
 } from './layerStyle'
 import { useMapInspection, type InspectedPoint } from './mapInspection'
+import { inspectedPointAt, nearestFeatureIndex } from './pointLookup'
+import { trackGradient, trackLine } from './track'
+import { prefersReducedMotion, useTrackProgress } from './useTrackProgress'
 
 const POINTS_LAYER_ID = 'layer-points'
 const LABELS_LAYER_ID = 'layer-labels'
+const TRACK_LAYER_ID = 'layer-track'
 const HOVER_RING = 3
 const PINNED_RING = 5
 // Clears the largest point (see MAX_RADIUS) plus its ring, so the tooltip never covers the point.
@@ -85,10 +95,12 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   const bounds = boundsFor(layer.map_layer)
   const propertyKeys = layer.map_layer.property_keys
   const [ready, setReady] = useState(false)
+  const mapRef = useRef<MapRef>(null)
   const [colorKey, setColorKey] = useState('')
   const [sizeKey, setSizeKey] = useState('')
   const [labelKey, setLabelKey] = useState('')
   const [hidden, setHidden] = useState<string[]>([])
+  const [showTrack, setShowTrack] = useState(false)
   const hover = useMapInspection((state) => state.hover)
   const pinned = useMapInspection((state) => state.pinned)
   const { setHover, setPinned, clear } = useMapInspection.getState()
@@ -122,6 +134,8 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
       setHidden([])
     },
   }
+  const track = useMemo(() => trackLine(layer.features.features), [layer.features])
+  const trackProgress = useTrackProgress(showTrack && track !== null)
   const drawableScheme = scheme && scheme.kind !== 'too-many' ? scheme : null
   const shownHidden = activeHidden(drawableScheme, hidden)
   const opacity = drawableScheme ? opacityExpression(drawableScheme, shownHidden) : 1
@@ -129,11 +143,18 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   const activeHover = hover?.data === layer.features ? hover : null
   const activePinned = pinned?.data === layer.features ? pinned : null
   // Resting on the pinned point would stack two rings on it.
-  const hoverIsPinned =
-    activeHover !== null &&
-    activePinned?.coordinates[0] === activeHover.coordinates[0] &&
-    activePinned.coordinates[1] === activeHover.coordinates[1]
+  const hoverIsPinned = activeHover !== null && activeHover.index === activePinned?.index
   const pointRadius = sizeScale ? radiusExpression(sizeScale) : DEFAULT_RADIUS
+
+  // Stepping through the points can pin one that is off screen; bring it into view.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !activePinned) return
+    const [lon, lat] = activePinned.coordinates
+    if (!map.getBounds().contains([lon, lat])) {
+      map.easeTo({ center: [lon, lat], duration: prefersReducedMotion() ? 0 : 500 })
+    }
+  }, [activePinned])
 
   function pointAt(event: MapLayerMouseEvent): InspectedPoint | null {
     // Typed by hand: the library's feature type depends on GeoJSON typings the linter cannot resolve.
@@ -148,12 +169,10 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
         !isHiddenPoint(candidate.properties, hiddenKey, shownHidden),
     )
     if (!hit) return null
-    return {
-      data: layer.features,
-      coordinates: hit.geometry.coordinates,
-      // Copied: the map hands back properties without a prototype, which cannot be sent to its worker.
-      properties: { ...hit.properties },
-    }
+    return inspectedPointAt(
+      layer.features,
+      nearestFeatureIndex(layer.features, hit.geometry.coordinates),
+    )
   }
 
   function toggleHidden(value: string) {
@@ -179,6 +198,7 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
     <div className="flex h-full w-full flex-col" data-map-ready={ready}>
       <div className="relative min-h-0 flex-1">
         <Map
+          ref={mapRef}
           initialViewState={
             bounds
               ? {
@@ -203,6 +223,17 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
             setReady(true)
           }}
         >
+          {showTrack && track && (
+            // Before the points, so the line runs underneath them.
+            <Source id="track" type="geojson" data={track} lineMetrics>
+              <Layer
+                id={TRACK_LAYER_ID}
+                type="line"
+                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                paint={{ 'line-width': 1.75, 'line-gradient': trackGradient(trackProgress) }}
+              />
+            </Source>
+          )}
           <Source id="layer" type="geojson" data={layer.features}>
             <Layer
               id={POINTS_LAYER_ID}
@@ -280,6 +311,7 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
               disabled={false}
               onChange={setLabelKey}
             />
+            {track && <ToggleControl label="Track" pressed={showTrack} onChange={setShowTrack} />}
           </div>
         )}
 

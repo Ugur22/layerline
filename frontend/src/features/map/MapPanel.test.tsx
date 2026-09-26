@@ -21,10 +21,18 @@ vi.mock('react-map-gl/maplibre', async () => {
         },
         props.children as never,
       ),
-    Source: (props: { data: { features: unknown[] }; children: unknown }) =>
+    Source: (props: {
+      id: string
+      data: { features?: unknown[]; geometry?: { coordinates: unknown } }
+      children: unknown
+    }) =>
       React.createElement(
         'div',
-        { 'data-testid': 'source', 'data-count': props.data.features.length },
+        {
+          'data-testid': props.id === 'layer' ? 'source' : `source-${props.id}`,
+          'data-count': props.data.features?.length,
+          'data-coordinates': JSON.stringify(props.data.geometry?.coordinates),
+        },
         props.children as never,
       ),
     Layer: (props: {
@@ -37,6 +45,7 @@ vi.mock('react-map-gl/maplibre', async () => {
         'data-color': JSON.stringify(props.paint['circle-color']),
         'data-radius': JSON.stringify(props.paint['circle-radius']),
         'data-opacity': JSON.stringify(props.paint['circle-opacity']),
+        'data-gradient': JSON.stringify(props.paint['line-gradient']),
         'data-label': JSON.stringify(props.layout?.['text-field']),
       }),
     Popup: (props: { children: unknown }) =>
@@ -190,6 +199,44 @@ describe('MapPanel', () => {
     expect(screen.getByTestId('map').getAttribute('data-style')).toMatch(/^https:\/\//)
   })
 
+  it('joins the points in file order with a track line that is off until asked for', async () => {
+    mockApi({
+      '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+      '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.95, 52.4])),
+    })
+    const user = userEvent.setup()
+    renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+    const toggle = await screen.findByRole('button', { name: 'Track' })
+    expect(screen.queryByTestId('source-track')).not.toBeInTheDocument()
+
+    await user.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('source-track')).toHaveAttribute(
+      'data-coordinates',
+      '[[4.9,52.37],[4.95,52.4]]',
+    )
+    expect(screen.getByTestId('layer-track').getAttribute('data-gradient')).toContain(
+      'line-progress',
+    )
+
+    await user.click(toggle)
+
+    expect(screen.queryByTestId('source-track')).not.toBeInTheDocument()
+  })
+
+  it('offers no track for a single point', async () => {
+    mockApi({
+      '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+      '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.9, 52.37], ['name'], true)),
+    })
+    renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+
+    await screen.findByText('good · 2 points')
+
+    expect(screen.queryByRole('button', { name: 'Track' })).not.toBeInTheDocument()
+  })
+
   it('falls back to a world view when the layer has no bounding box', async () => {
     mockApi({
       '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
@@ -324,6 +371,7 @@ describe('MapPanel', () => {
     act(() => {
       useMapInspection.getState().setPinned({
         data: { type: 'FeatureCollection', features: [] },
+        index: 0,
         coordinates: [4.9, 52.37],
         properties: { name: 'from the first layer' },
       })

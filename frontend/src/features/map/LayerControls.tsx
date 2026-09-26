@@ -73,3 +73,26 @@ export function SegmentedControl({ label, value, keys, disabled, onChange }: Con
     </div>
   )
 }
+
+export function ToggleControl({
+  label,
+  pressed,
+  onChange,
+}: {
+  label: string
+  pressed: boolean
+  onChange: (pressed: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      onClick={() => {
+        onChange(!pressed)
+      }}
+      className="h-7 rounded-md border px-2.5 text-xs font-medium transition-colors hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/90"
+    >
+      {label}
+    </button>
+  )
+}
