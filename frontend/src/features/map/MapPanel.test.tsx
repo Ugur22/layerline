@@ -225,6 +225,17 @@ describe('MapPanel', () => {
     expect(screen.queryByTestId('source-track')).not.toBeInTheDocument()
   })
 
+  it('offers the track even when the layer has no properties to control', async () => {
+    mockApi({
+      '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+      '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.95, 52.4], [])),
+    })
+    renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+
+    expect(await screen.findByRole('button', { name: 'Track' })).toBeInTheDocument()
+    expect(screen.queryByRole('radiogroup', { name: 'Colour by' })).not.toBeInTheDocument()
+  })
+
   it('offers no track for a single point', async () => {
     mockApi({
       '/api/v1/imports/job-1': () => json({ import_job: job({}) }),

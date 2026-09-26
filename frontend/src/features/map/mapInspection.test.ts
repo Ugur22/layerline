@@ -32,6 +32,14 @@ describe('useMapInspection', () => {
     expect(useMapInspection.getState().hover).toBeNull()
   })
 
+  it('forgets which points are dimmed when cleared', () => {
+    useMapInspection.getState().setHiddenIndexes(new Set([1, 2]))
+
+    useMapInspection.getState().clear()
+
+    expect(useMapInspection.getState().hiddenIndexes.size).toBe(0)
+  })
+
   it('clears both the hover and the pinned point', () => {
     useMapInspection.getState().setHover(point(4))
     useMapInspection.getState().setPinned(point(5))

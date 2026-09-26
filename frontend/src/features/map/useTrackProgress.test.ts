@@ -54,6 +54,8 @@ describe('useTrackProgress', () => {
     expect(result.current).toBe(0)
 
     rerender({ on: true })
+    // Before any frame has run, not a flash of the finished line from the previous time.
+    expect(result.current).toBe(0)
     act(() => {
       vi.advanceTimersByTime(16)
     })

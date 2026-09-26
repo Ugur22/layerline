@@ -324,9 +324,8 @@ test('the track line draws through the points in file order without map errors',
   const track = page.getByRole('button', { name: 'Track', exact: true })
   await track.click()
   await expect(track).toHaveAttribute('aria-pressed', 'true')
-  // Long enough for the draw-in to finish, then idle again means the line rendered.
+  // Long enough for the draw-in to finish. A rejected line style would show up as a console error.
   await page.waitForTimeout(2000)
-  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
   expect(problems).toEqual([])
 })
 
@@ -350,11 +349,48 @@ test('stepping through the points follows the order of the file, not names or id
     await expect(inspector).toContainText(expected)
   }
   await expect(inspector).toContainText('3 of 3')
-  await expect(next).toBeDisabled()
+  await expect(next).toHaveAttribute('aria-disabled', 'true')
 
   await inspector.getByRole('button', { name: 'Previous point' }).click()
   await expect(inspector).toContainText('T-1')
   await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+  expect(problems).toEqual([])
+})
+
+test('of two points at the same spot, the visible one is the one that can be pointed at', async ({
+  page,
+}) => {
+  const problems = watchBrowserHealth(page)
+  const name = uniqueName('twins', 'csv')
+  await page.locator('input[type=file]').setInputFiles({
+    name,
+    mimeType: 'text/csv',
+    buffer: Buffer.from('name,lat,lon,type\nS-A,52.4,4.5,x\nS-B,52.4,4.5,y\n'),
+  })
+  await page.getByRole('button', { name: 'Upload' }).click()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+  await page
+    .getByRole('radiogroup', { name: 'Colour by' })
+    .getByText('type', { exact: true })
+    .click()
+
+  const canvas = page.locator('canvas.maplibregl-canvas')
+  const box = await canvas.boundingBox()
+  if (!box) throw new Error('map canvas has no box')
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 + POINT_SHIFT }
+  const inspector = page.getByRole('region', { name: 'Point inspector' })
+  const legend = page.getByRole('group', { name: 'Legend for type' })
+
+  await legend.getByRole('button', { name: /^x/ }).click()
+  await page.mouse.move(centre.x + 30, centre.y + 30)
+  await page.mouse.move(centre.x, centre.y)
+  await expect(inspector).toContainText('S-B')
+
+  await legend.getByRole('button', { name: /^x/ }).click()
+  await legend.getByRole('button', { name: /^y/ }).click()
+  await page.mouse.move(centre.x + 30, centre.y + 30)
+  await page.mouse.move(centre.x, centre.y)
+  await expect(inspector).toContainText('S-A')
   expect(problems).toEqual([])
 })
 

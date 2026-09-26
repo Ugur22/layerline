@@ -136,13 +136,19 @@ describe('PointInspector', () => {
       const user = userEvent.setup()
       render(<PointInspector features={features} />)
       await user.click(screen.getByRole('button', { name: 'Next point' }))
-      expect(screen.getByRole('button', { name: 'Previous point' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Previous point' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      )
 
       await user.click(screen.getByRole('button', { name: 'Next point' }))
       await user.click(screen.getByRole('button', { name: 'Next point' }))
 
       expect(pinnedName()).toBe('S-003')
-      expect(screen.getByRole('button', { name: 'Next point' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Next point' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      )
     })
 
     it('says where the point is in the file', async () => {
@@ -157,8 +163,54 @@ describe('PointInspector', () => {
     it('has nothing to step through in an empty layer', () => {
       render(<PointInspector features={{ type: 'FeatureCollection', features: [] }} />)
 
-      expect(screen.getByRole('button', { name: 'Next point' })).toBeDisabled()
-      expect(screen.getByRole('button', { name: 'Previous point' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Next point' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      )
+      expect(screen.getByRole('button', { name: 'Previous point' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      )
+    })
+
+    it('does nothing when a disabled button is pressed, and keeps keyboard focus on it', async () => {
+      const user = userEvent.setup()
+      render(<PointInspector features={features} />)
+      await user.click(screen.getByRole('button', { name: 'Next point' }))
+      const previous = screen.getByRole('button', { name: 'Previous point' })
+      previous.focus()
+
+      await user.keyboard('{Enter}')
+
+      expect(pinnedName()).toBe('S-001')
+      expect(previous).toHaveFocus()
+    })
+
+    it('skips points that are dimmed on the map', async () => {
+      useMapInspection.getState().setHiddenIndexes(new Set([1]))
+      const user = userEvent.setup()
+      render(<PointInspector features={features} />)
+
+      await user.click(screen.getByRole('button', { name: 'Next point' }))
+      await user.click(screen.getByRole('button', { name: 'Next point' }))
+      expect(pinnedName()).toBe('S-003')
+
+      await user.click(screen.getByRole('button', { name: 'Previous point' }))
+      expect(pinnedName()).toBe('S-001')
+    })
+
+    it('has nowhere to go when every remaining point is dimmed', async () => {
+      useMapInspection.getState().setHiddenIndexes(new Set([2]))
+      const user = userEvent.setup()
+      render(<PointInspector features={features} />)
+      await user.click(screen.getByRole('button', { name: 'Next point' }))
+      await user.click(screen.getByRole('button', { name: 'Next point' }))
+
+      expect(pinnedName()).toBe('S-002')
+      expect(screen.getByRole('button', { name: 'Next point' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      )
     })
   })
 })

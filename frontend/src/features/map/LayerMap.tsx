@@ -30,8 +30,9 @@ import {
 } from './layerStyle'
 import { useMapInspection, type InspectedPoint } from './mapInspection'
 import { inspectedPointAt, nearestFeatureIndex } from './pointLookup'
-import { trackGradient, trackLine } from './track'
+import { trackGradient, trackLine, type TrackLine } from './track'
 import { prefersReducedMotion, useTrackProgress } from './useTrackProgress'
+import { isWithinInset } from './viewport'
 
 const POINTS_LAYER_ID = 'layer-points'
 const LABELS_LAYER_ID = 'layer-labels'
@@ -46,6 +47,22 @@ const LABEL_FONT = 'Noto Sans Regular'
 
 const NOTE_CLASS =
   'max-w-56 rounded-lg bg-background/95 px-2 py-1 text-xs shadow-sm ring-1 ring-border'
+
+// Its own component so the draw-in animation re-renders only the line, not the whole map.
+function TrackLayer({ track }: { track: TrackLine }) {
+  const progress = useTrackProgress(true)
+  return (
+    // Placed before the points, so the line runs underneath them.
+    <Source id="track" type="geojson" data={track} lineMetrics>
+      <Layer
+        id={TRACK_LAYER_ID}
+        type="line"
+        layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+        paint={{ 'line-width': 1.75, 'line-gradient': trackGradient(progress) }}
+      />
+    </Source>
+  )
+}
 
 // A ring drawn around one point, sized from the point's own radius so it follows size-by-property.
 function PointRing({
@@ -103,7 +120,7 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   const [showTrack, setShowTrack] = useState(false)
   const hover = useMapInspection((state) => state.hover)
   const pinned = useMapInspection((state) => state.pinned)
-  const { setHover, setPinned, clear } = useMapInspection.getState()
+  const { setHover, setPinned, setHiddenIndexes, clear } = useMapInspection.getState()
 
   // The map is remounted per layer; what was inspected on the old one must not linger in the panel.
   useEffect(() => clear, [clear])
@@ -135,9 +152,8 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
     },
   }
   const track = useMemo(() => trackLine(layer.features.features), [layer.features])
-  const trackProgress = useTrackProgress(showTrack && track !== null)
   const drawableScheme = scheme && scheme.kind !== 'too-many' ? scheme : null
-  const shownHidden = activeHidden(drawableScheme, hidden)
+  const shownHidden = useMemo(() => activeHidden(drawableScheme, hidden), [drawableScheme, hidden])
   const opacity = drawableScheme ? opacityExpression(drawableScheme, shownHidden) : 1
   const hiddenKey = drawableScheme?.kind === 'categorical' ? drawableScheme.key : ''
   const activeHover = hover?.data === layer.features ? hover : null
@@ -146,12 +162,26 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   const hoverIsPinned = activeHover !== null && activeHover.index === activePinned?.index
   const pointRadius = sizeScale ? radiusExpression(sizeScale) : DEFAULT_RADIUS
 
+  // Tell the inspector which points are dimmed, so stepping can skip them.
+  useEffect(() => {
+    const indexes = new Set<number>()
+    if (hiddenKey !== '') {
+      layer.features.features.forEach((feature, index) => {
+        if (isHiddenPoint(feature.properties, hiddenKey, shownHidden)) indexes.add(index)
+      })
+    }
+    setHiddenIndexes(indexes)
+  }, [layer.features, hiddenKey, shownHidden, setHiddenIndexes])
+
   // Stepping through the points can pin one that is off screen; bring it into view.
   useEffect(() => {
     const map = mapRef.current
     if (!map || !activePinned) return
     const [lon, lat] = activePinned.coordinates
-    if (!map.getBounds().contains([lon, lat])) {
+    const container = map.getContainer()
+    const size = { width: container.clientWidth, height: container.clientHeight }
+    // The bar and legend float over the edges, so a point under them counts as out of view.
+    if (!isWithinInset(map.project([lon, lat]), size, FIT_PADDING)) {
       map.easeTo({ center: [lon, lat], duration: prefersReducedMotion() ? 0 : 500 })
     }
   }, [activePinned])
@@ -159,6 +189,7 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   function pointAt(event: MapLayerMouseEvent): InspectedPoint | null {
     // Typed by hand: the library's feature type depends on GeoJSON typings the linter cannot resolve.
     const hits = (event.features ?? []) as {
+      id?: number | string
       geometry: { type: string; coordinates: [number, number] }
       properties: Record<string, unknown>
     }[]
@@ -169,10 +200,13 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
         !isHiddenPoint(candidate.properties, hiddenKey, shownHidden),
     )
     if (!hit) return null
-    return inspectedPointAt(
-      layer.features,
-      nearestFeatureIndex(layer.features, hit.geometry.coordinates),
-    )
+    // `generateId` numbers the source's features by their place in the layer, which tells apart
+    // points at the same spot; matching by position is only the fallback.
+    const index =
+      typeof hit.id === 'number' && layer.features.features[hit.id]
+        ? hit.id
+        : nearestFeatureIndex(layer.features, hit.geometry.coordinates)
+    return inspectedPointAt(layer.features, index)
   }
 
   function toggleHidden(value: string) {
@@ -223,18 +257,8 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
             setReady(true)
           }}
         >
-          {showTrack && track && (
-            // Before the points, so the line runs underneath them.
-            <Source id="track" type="geojson" data={track} lineMetrics>
-              <Layer
-                id={TRACK_LAYER_ID}
-                type="line"
-                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-                paint={{ 'line-width': 1.75, 'line-gradient': trackGradient(trackProgress) }}
-              />
-            </Source>
-          )}
-          <Source id="layer" type="geojson" data={layer.features}>
+          {showTrack && track && <TrackLayer track={track} />}
+          <Source id="layer" type="geojson" data={layer.features} generateId>
             <Layer
               id={POINTS_LAYER_ID}
               type="circle"
@@ -288,29 +312,33 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
           )}
         </Map>
 
-        {propertyKeys.length > 0 && (
+        {(propertyKeys.length > 0 || track) && (
           <div className="absolute top-2 left-2 z-10 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg bg-background/95 px-2 py-1.5 shadow-sm ring-1 ring-border">
-            {propertyKeys.length <= MAX_SEGMENTED_KEYS ? (
-              <SegmentedControl {...colourProps} />
-            ) : (
-              <SelectControl {...colourProps} />
+            {propertyKeys.length > 0 && (
+              <>
+                {propertyKeys.length <= MAX_SEGMENTED_KEYS ? (
+                  <SegmentedControl {...colourProps} />
+                ) : (
+                  <SelectControl {...colourProps} />
+                )}
+                {sizeKeys.length > 0 && (
+                  <SelectControl
+                    label="Size by"
+                    value={sizeKey}
+                    keys={sizeKeys}
+                    disabled={!styleFeatures}
+                    onChange={setSizeKey}
+                  />
+                )}
+                <SelectControl
+                  label="Label by"
+                  value={labelKey}
+                  keys={propertyKeys}
+                  disabled={false}
+                  onChange={setLabelKey}
+                />
+              </>
             )}
-            {sizeKeys.length > 0 && (
-              <SelectControl
-                label="Size by"
-                value={sizeKey}
-                keys={sizeKeys}
-                disabled={!styleFeatures}
-                onChange={setSizeKey}
-              />
-            )}
-            <SelectControl
-              label="Label by"
-              value={labelKey}
-              keys={propertyKeys}
-              disabled={false}
-              onChange={setLabelKey}
-            />
             {track && <ToggleControl label="Track" pressed={showTrack} onChange={setShowTrack} />}
           </div>
         )}
