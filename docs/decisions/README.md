@@ -43,4 +43,10 @@ What becomes easier, harder, or required. Follow-ups.
 
 ## Index
 
-_No ADRs yet._
+- [0001 Repo layout and tooling](0001-repo-layout-and-tooling.md) — accepted
+- [0002 Import job execution (Procrastinate) and raw file storage](0002-import-jobs-and-file-storage.md) — accepted
+- [0003 Identity and tenancy in the first slice](0003-first-slice-identity-and-tenancy.md) — accepted
+- [0004 Frontend UI toolkit](0004-frontend-ui-toolkit.md) — accepted
+- [0005 Client state, data fetching, and pattern matching](0005-client-state-and-data-fetching.md) — accepted
+- [0006 Map stack](0006-map-stack.md) — accepted
+- [0007 Backend framework, database, and local development](0007-backend-database-and-local-dev.md) — accepted

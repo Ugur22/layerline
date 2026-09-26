@@ -4,7 +4,7 @@ Layerline is a spatial-data operations platform: users upload GeoJSON/CSV survey
 
 ## Current phase
 
-**Phase 0 — documentation and agent foundation.** There is no application code yet. Docs describe *intended* direction; nothing in `docs/architecture.md` or `docs/api-contracts.md` is implemented until a later task says so. Do not treat proposals as facts about the codebase.
+**Phase 1 — backend first slice.** The backend (FastAPI, PostGIS, Procrastinate worker, Compose) implements upload → import job → map layer. The frontend is not started. Docs in `docs/architecture.md` and `docs/api-contracts.md` mark what is decided; anything still labelled Assumption or Open is not a fact about the codebase.
 
 ## Docs index (read only what your task needs)
 

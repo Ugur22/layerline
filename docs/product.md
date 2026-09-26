@@ -24,6 +24,7 @@ Roles, not personas; no real users exist yet.
 
 - No editing of features in the UI (planned later, out of scope now).
 - No formats beyond GeoJSON and CSV with point coordinates (Open: whether Shapefile/GeoPackage ever join).
+- No scheduled or recurring imports. Imports are triggered by a user upload only. Backlog (not planned): revisit only if a pull-based data source is ever added, which also requires deciding what re-import does to existing features (see `domain.md`). Background retries and maintenance tasks are separate and in scope (ADR 0002).
 - No real-time collaboration, no offline mode.
 - No third-party integrations, billing, or public API for external consumers.
 - No claims about scale or performance until measured.
