@@ -31,6 +31,7 @@ import {
 import { useMapInspection, type InspectedPoint } from './mapInspection'
 import { inspectedPointAt, nearestFeatureIndex } from './pointLookup'
 import { trackGradient, trackLine, type TrackLine } from './track'
+import { ValueProfile } from './ValueProfile'
 import { prefersReducedMotion, useTrackProgress } from './useTrackProgress'
 import { isWithinInset } from './viewport'
 
@@ -118,6 +119,7 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   const [labelKey, setLabelKey] = useState('')
   const [hidden, setHidden] = useState<string[]>([])
   const [showTrack, setShowTrack] = useState(false)
+  const [profileKey, setProfileKey] = useState('')
   const hover = useMapInspection((state) => state.hover)
   const pinned = useMapInspection((state) => state.pinned)
   const { setHover, setPinned, setHiddenIndexes, clear } = useMapInspection.getState()
@@ -152,6 +154,10 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
     },
   }
   const track = useMemo(() => trackLine(layer.features.features), [layer.features])
+  // The property the profile plots: the one chosen, else the one already sizing or colouring the
+  // points, else the first number there is.
+  const resolvedProfileKey =
+    [profileKey, sizeKey, colorKey].find((key) => sizeKeys.includes(key)) ?? sizeKeys[0]
   const drawableScheme = scheme && scheme.kind !== 'too-many' ? scheme : null
   const shownHidden = useMemo(() => activeHidden(drawableScheme, hidden), [drawableScheme, hidden])
   const opacity = drawableScheme ? opacityExpression(drawableScheme, shownHidden) : 1
@@ -229,8 +235,8 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   return (
     // `idle` fires only once every source is loaded and rendered, which needs the map's worker. The
     // attribute lets end-to-end tests wait for a map that really works, not just one that mounted.
-    <div className="flex h-full w-full flex-col" data-map-ready={ready}>
-      <div className="relative min-h-0 flex-1">
+    <div className="flex flex-col gap-4" data-map-ready={ready}>
+      <div className="relative h-[min(46vh,34rem)] min-h-72 overflow-hidden rounded-lg border">
         <Map
           ref={mapRef}
           initialViewState={
@@ -361,6 +367,15 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
           {sizeScale && <SizeLegend scale={sizeScale} />}
         </div>
       </div>
+      {resolvedProfileKey && (
+        <ValueProfile
+          features={layer.features}
+          keys={sizeKeys}
+          valueKey={resolvedProfileKey}
+          onKeyChange={setProfileKey}
+          scheme={drawableScheme}
+        />
+      )}
     </div>
   )
 }

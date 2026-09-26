@@ -221,3 +221,34 @@ export function visibleFilter(
   if (scheme?.kind !== 'categorical' || hidden.length === 0) return undefined
   return ['!', ['in', ['to-string', ['get', scheme.key]], ['literal', [...hidden]]]]
 }
+
+function channels(hex: string): number[] {
+  return [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16))
+}
+
+// Blend two colours; the same straight-line mix in RGB that the map's `interpolate` uses.
+function mixColors(from: string, to: string, t: number): string {
+  const a = channels(from)
+  const b = channels(to)
+  const mixed = a.map((value, index) => Math.round(value + ((b[index] ?? value) - value) * t))
+  return `#${mixed.map((value) => value.toString(16).padStart(2, '0')).join('')}`
+}
+
+// The colour the map gives one point, for charts that show the same points as the map.
+export function pointColor(
+  scheme: DrawableColorScheme | null,
+  properties: Record<string, unknown>,
+): string {
+  if (!scheme) return DEFAULT_COLOR
+  const text = propertyText(properties[scheme.key])
+  if (text === '') return MISSING_COLOR
+  if (scheme.kind === 'categorical') {
+    return scheme.entries.find((entry) => entry.value === text)?.color ?? MISSING_COLOR
+  }
+  const value = asNumber(text)
+  if (value === null) return MISSING_COLOR
+  const [low, mid, high] = NUMERIC_RAMP
+  if (scheme.min === scheme.max) return mid
+  const t = (value - scheme.min) / (scheme.max - scheme.min)
+  return t <= 0.5 ? mixColors(low, mid, t * 2) : mixColors(mid, high, (t - 0.5) * 2)
+}

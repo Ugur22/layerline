@@ -394,6 +394,44 @@ test('of two points at the same spot, the visible one is the one that can be poi
   expect(problems).toEqual([])
 })
 
+test('pointing at the depth profile shows that point on the map side and pins it on click', async ({
+  page,
+}) => {
+  const problems = watchBrowserHealth(page)
+  const name = uniqueName('profile', 'csv')
+  await page.locator('input[type=file]').setInputFiles({
+    name,
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      'name,lat,lon,depth_m\nT-3,52.3,4.5,10\nT-1,52.4,4.6,20\nT-2,52.5,4.7,30\n',
+    ),
+  })
+  await page.getByRole('button', { name: 'Upload' }).click()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+  await expect(page.getByText('depth_m along the file order')).toBeVisible()
+
+  const surface = page.getByTestId('profile-surface')
+  // The chart sits below the map, so it may be off screen and the mouse can only reach what shows.
+  await surface.scrollIntoViewIfNeeded()
+  const box = await surface.boundingBox()
+  if (!box) throw new Error('profile has no box')
+  const inspector = page.getByRole('region', { name: 'Point inspector' })
+  const column = (index: number) => box.x + (box.width * (index + 0.5)) / 3
+  const middle = box.y + box.height / 2
+
+  await page.mouse.move(column(1), middle)
+  await expect(inspector).toContainText('Hovering')
+  await expect(inspector).toContainText('T-1')
+  await expect(page.getByTestId('profile-cursor')).toContainText('T-1 · 20')
+
+  await page.mouse.click(column(2), middle)
+  await page.mouse.move(box.x - 30, middle)
+  await expect(inspector).toContainText('Pinned point')
+  await expect(inspector).toContainText('T-2')
+  await expect(page.getByTestId('profile-cursor')).toContainText('T-2 · 30')
+  expect(problems).toEqual([])
+})
+
 test('an invalid CSV reports spreadsheet row numbers', async ({ page }) => {
   await upload(page, 'bad-rows.csv', uniqueName('badcsv', 'csv'))
 

@@ -236,6 +236,80 @@ describe('MapPanel', () => {
     expect(screen.queryByRole('radiogroup', { name: 'Colour by' })).not.toBeInTheDocument()
   })
 
+  describe('value profile', () => {
+    const rows = [
+      { name: 'a', depth_m: '10', temp: '4' },
+      { name: 'b', depth_m: '20', temp: '5' },
+    ]
+
+    it('plots the first numeric property, and follows the one that sizes the points', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () =>
+          json(layerWithProperties(rows, ['depth_m', 'name', 'temp'])),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+
+      expect(await screen.findByText('depth_m along the file order')).toBeInTheDocument()
+
+      await user.selectOptions(screen.getByLabelText('Size by'), 'temp')
+
+      expect(screen.getByText('temp along the file order')).toBeInTheDocument()
+    })
+
+    it('lets the user pick the property to plot, whatever sizes the points', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () =>
+          json(layerWithProperties(rows, ['depth_m', 'name', 'temp'])),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      await screen.findByText('depth_m along the file order')
+
+      await user.selectOptions(screen.getByLabelText('Profile of'), 'temp')
+
+      expect(screen.getByText('temp along the file order')).toBeInTheDocument()
+    })
+
+    it('prefers the property that sizes the points, then the one that colours them', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () =>
+          json(layerWithProperties(rows, ['depth_m', 'name', 'temp'])),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      await screen.findByText('depth_m along the file order')
+
+      await user.click(
+        within(screen.getByRole('radiogroup', { name: 'Colour by' })).getByRole('radio', {
+          name: 'temp',
+        }),
+      )
+      expect(screen.getByText('temp along the file order')).toBeInTheDocument()
+
+      await user.selectOptions(screen.getByLabelText('Size by'), 'depth_m')
+      expect(screen.getByText('depth_m along the file order')).toBeInTheDocument()
+    })
+
+    it('has nothing to plot when no property is a number', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () =>
+          json(layerWithProperties([{ type: 'buoy' }, { type: 'mooring' }], ['type'])),
+      })
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      await screen.findByRole('radiogroup', { name: 'Colour by' })
+
+      await vi.waitFor(() => {
+        expect(screen.getByRole('radio', { name: 'None' })).toBeEnabled()
+      })
+      expect(screen.queryByText(/along the file order/)).not.toBeInTheDocument()
+    })
+  })
+
   it('offers no track for a single point', async () => {
     mockApi({
       '/api/v1/imports/job-1': () => json({ import_job: job({}) }),

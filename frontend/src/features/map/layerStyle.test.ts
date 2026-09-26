@@ -5,12 +5,16 @@ import {
   buildColorScheme,
   buildSizeScale,
   colorExpression,
+  DEFAULT_COLOR,
   MAX_CATEGORIES,
   MAX_RADIUS,
+  MISSING_COLOR,
   HIDDEN_OPACITY,
   isHiddenPoint,
   MIN_RADIUS,
+  NUMERIC_RAMP,
   opacityExpression,
+  pointColor,
   radiusExpression,
   visibleFilter,
 } from './layerStyle'
@@ -254,5 +258,53 @@ describe('visibleFilter', () => {
       '!',
       ['in', ['to-string', ['get', 'p']], ['literal', ['a']]],
     ])
+  })
+})
+
+describe('pointColor', () => {
+  it('uses the default colour when nothing is coloured', () => {
+    expect(pointColor(null, { p: 'a' })).toBe(DEFAULT_COLOR)
+  })
+
+  it('gives a category its own colour, and points without a value the missing colour', () => {
+    const scheme = buildColorScheme(features(['a', 'b', undefined]), 'p')
+    if (scheme?.kind !== 'categorical') throw new Error('expected a categorical scheme')
+
+    expect(pointColor(scheme, { p: 'b' })).toBe(scheme.entries[1]?.color)
+    expect(pointColor(scheme, {})).toBe(MISSING_COLOR)
+  })
+
+  it('places a number on the ramp: the lowest value is the first stop, the highest the last', () => {
+    const scheme = buildColorScheme(features(['0', '10']), 'p')
+    if (scheme?.kind !== 'numeric') throw new Error('expected a numeric scheme')
+    const [low, , high] = NUMERIC_RAMP
+
+    expect(pointColor(scheme, { p: '0' })).toBe(low)
+    expect(pointColor(scheme, { p: '10' })).toBe(high)
+  })
+
+  it('blends between the stops for values in between', () => {
+    const scheme = buildColorScheme(features(['0', '10']), 'p')
+    if (scheme?.kind !== 'numeric') throw new Error('expected a numeric scheme')
+    const [, mid] = NUMERIC_RAMP
+
+    expect(pointColor(scheme, { p: '5' })).toBe(mid)
+    // Halfway between the first two stops, channel by channel: (253,231,37) and (33,145,140).
+    expect(pointColor(scheme, { p: '2.5' })).toBe('#8fbc59')
+  })
+
+  it('uses the missing colour for a number that is missing', () => {
+    const scheme = buildColorScheme(features(['0', '10', undefined]), 'p')
+    if (scheme?.kind !== 'numeric') throw new Error('expected a numeric scheme')
+
+    expect(pointColor(scheme, {})).toBe(MISSING_COLOR)
+  })
+
+  it('uses one flat colour when every value is the same', () => {
+    const scheme = buildColorScheme(features(['7', '7']), 'p')
+    if (scheme?.kind !== 'numeric') throw new Error('expected a numeric scheme')
+    const [, mid] = NUMERIC_RAMP
+
+    expect(pointColor(scheme, { p: '7' })).toBe(mid)
   })
 })

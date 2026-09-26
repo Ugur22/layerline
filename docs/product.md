@@ -45,7 +45,7 @@ Acceptance for the slice:
 - a valid file renders the same number of features it contained;
 - the flow is covered by one end-to-end test.
 
-Deliberately excluded from the first slice: authentication beyond a placeholder (Open: see `architecture.md`) and editing. CSV import, property filtering, one layer per import (several per dataset), and on the map a hover tooltip, a click-to-pin point inspector panel, colouring and sizing points by a property, and legend rows that hide categories (all client-side, no contract change) were added afterwards; see `api-contracts.md`.
+Deliberately excluded from the first slice: authentication beyond a placeholder (Open: see `architecture.md`) and editing. CSV import, property filtering, one layer per import (several per dataset), and on the map a hover tooltip, a click-to-pin point inspector panel that steps through the points in file order, a track line, a chart of one numeric property along the file order linked to the map, colouring and sizing points by a property, and legend rows that hide categories were added afterwards (client-side, apart from the file-order guarantee); see `api-contracts.md`.
 
 ## Open questions
 
