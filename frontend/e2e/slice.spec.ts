@@ -323,6 +323,10 @@ test('the track line draws through the points in file order without map errors',
   await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
 
   const track = page.getByRole('button', { name: 'Track', exact: true })
+  // The story opens on the overview, which shows the track; the reader can switch it off and on.
+  await expect(track).toHaveAttribute('aria-pressed', 'true')
+  await track.click()
+  await expect(track).toHaveAttribute('aria-pressed', 'false')
   await track.click()
   await expect(track).toHaveAttribute('aria-pressed', 'true')
   // Long enough for the draw-in to finish. A rejected line style would show up as a console error.
@@ -432,6 +436,43 @@ test('pointing at the depth profile shows that point on the map side and pins it
   await expect(inspector).toContainText('Pinned point')
   await expect(inspector).toContainText('T-2')
   await expect(page.getByTestId('profile-cursor')).toContainText('T-2 · 30')
+  expect(problems).toEqual([])
+})
+
+test('the story tells what the north sea sample shows and sets the map to show it', async ({
+  page,
+}) => {
+  const problems = watchBrowserHealth(page)
+  await upload(page, 'north-sea-survey.csv', uniqueName('story', 'csv'))
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+
+  const story = page.getByRole('region', { name: 'What you are looking at' })
+  await expect(story).toContainText('40 points in file order')
+  await expect(story).toContainText('S-001')
+  await expect(story).toContainText('about 150 km')
+  await expect(story).toContainText('1 / 4')
+
+  await story.getByRole('button', { name: 'Next' }).click()
+  await expect(story).toContainText('campaign: A, B')
+  await expect(story).toContainText('A (points 1–22), B (points 23–40)')
+  await expect(story).toContainText('depth_m separates them cleanly: A 8.1–28.3, then B 29.3–47.2')
+  await expect(page.getByRole('group', { name: 'Legend for campaign' })).toBeVisible()
+  await expect(
+    page.getByRole('radiogroup', { name: 'Colour by' }).getByRole('radio', { name: 'campaign' }),
+  ).toBeChecked()
+
+  await story.getByRole('button', { name: 'Next' }).click()
+  await expect(story).toContainText('depth_m: 8.1 to 47.2')
+  await expect(story).toContainText('28 of 39 steps go up')
+  await expect(page.getByText('depth_m along the file order')).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Size legend for depth_m' })).toBeVisible()
+
+  await story.getByRole('button', { name: 'Next' }).click()
+  await expect(story).toContainText(
+    'repeat in a fixed order along the file: buoy, mooring, sensor, drifter',
+  )
+  await expect(story.getByRole('button', { name: 'Start over' })).toBeVisible()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
   expect(problems).toEqual([])
 })
 

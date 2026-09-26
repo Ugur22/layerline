@@ -1,6 +1,6 @@
 # 0012. Layer story generated from layer statistics
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-26
 
 ## Context

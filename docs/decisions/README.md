@@ -53,5 +53,5 @@ What becomes easier, harder, or required. Follow-ups.
 - [0008 npm as the frontend package manager](0008-npm-as-frontend-package-manager.md) — accepted
 - [0009 Basemap tile source](0009-basemap-tile-source.md) — accepted
 - [0010 Playwright for end-to-end tests](0010-playwright-for-end-to-end-tests.md) — accepted
-- [0012 Layer story generated from layer statistics](0012-generated-layer-story.md) — proposed
+- [0012 Layer story generated from layer statistics](0012-generated-layer-story.md) — accepted
 - [0013 Recharts, through shadcn's chart component, for charts](0013-recharts-for-charts.md) — proposed

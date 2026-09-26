@@ -29,6 +29,7 @@ import {
   visibleFilter,
 } from './layerStyle'
 import { useMapInspection, type InspectedPoint } from './mapInspection'
+import { useMapView } from './mapView'
 import { inspectedPointAt, nearestFeatureIndex } from './pointLookup'
 import { trackGradient, trackLine, type TrackLine } from './track'
 import { ValueProfile } from './ValueProfile'
@@ -114,12 +115,14 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   const propertyKeys = layer.map_layer.property_keys
   const [ready, setReady] = useState(false)
   const mapRef = useRef<MapRef>(null)
-  const [colorKey, setColorKey] = useState('')
-  const [sizeKey, setSizeKey] = useState('')
-  const [labelKey, setLabelKey] = useState('')
-  const [hidden, setHidden] = useState<string[]>([])
-  const [showTrack, setShowTrack] = useState(false)
-  const [profileKey, setProfileKey] = useState('')
+  const colorKey = useMapView((state) => state.colorKey)
+  const sizeKey = useMapView((state) => state.sizeKey)
+  const labelKey = useMapView((state) => state.labelKey)
+  const hidden = useMapView((state) => state.hidden)
+  const showTrack = useMapView((state) => state.showTrack)
+  const profileKey = useMapView((state) => state.profileKey)
+  const { setColorKey, setSizeKey, setLabelKey, setShowTrack, setProfileKey } =
+    useMapView.getState()
   const hover = useMapInspection((state) => state.hover)
   const pinned = useMapInspection((state) => state.pinned)
   const { setHover, setPinned, setHiddenIndexes, clear } = useMapInspection.getState()
@@ -147,11 +150,7 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
     value: colorKey,
     keys: propertyKeys,
     disabled: !styleFeatures,
-    onChange: (value: string) => {
-      setColorKey(value)
-      // Hidden values belong to one property's legend and mean nothing under another.
-      setHidden([])
-    },
+    onChange: setColorKey,
   }
   const track = useMemo(() => trackLine(layer.features.features), [layer.features])
   // The property the profile plots: the one chosen, else the one already sizing or colouring the
@@ -216,9 +215,7 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   }
 
   function toggleHidden(value: string) {
-    setHidden((current) =>
-      current.includes(value) ? current.filter((v) => v !== value) : [...current, value],
-    )
+    useMapView.getState().toggleHidden(value)
     // A point that was just dimmed must not keep its ring, tooltip or place in the inspector.
     setHover(null)
     setPinned(null)

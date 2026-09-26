@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ImportJob, MapLayerResponse } from '@/api/types'
 import { useImportSession } from '@/features/imports/importSession'
 import { useMapInspection } from './mapInspection'
+import { useMapView } from './mapView'
 import { renderWithClient } from '@/test/render'
 import { MapPanel } from './MapPanel'
 
@@ -146,6 +147,7 @@ describe('MapPanel', () => {
   beforeEach(() => {
     useImportSession.setState({ jobId: 'job-1', filter: null })
     useMapInspection.getState().clear()
+    useMapView.getState().reset()
   })
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -199,7 +201,7 @@ describe('MapPanel', () => {
     expect(screen.getByTestId('map').getAttribute('data-style')).toMatch(/^https:\/\//)
   })
 
-  it('joins the points in file order with a track line that is off until asked for', async () => {
+  it('joins the points in file order with a track line, which the reader can switch off and on', async () => {
     mockApi({
       '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
       '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.95, 52.4])),
@@ -207,10 +209,8 @@ describe('MapPanel', () => {
     const user = userEvent.setup()
     renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
     const toggle = await screen.findByRole('button', { name: 'Track' })
-    expect(screen.queryByTestId('source-track')).not.toBeInTheDocument()
 
-    await user.click(toggle)
-
+    // The story opens on the overview, which shows the track.
     expect(toggle).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('source-track')).toHaveAttribute(
       'data-coordinates',
@@ -222,7 +222,12 @@ describe('MapPanel', () => {
 
     await user.click(toggle)
 
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
     expect(screen.queryByTestId('source-track')).not.toBeInTheDocument()
+
+    await user.click(toggle)
+
+    expect(screen.getByTestId('source-track')).toBeInTheDocument()
   })
 
   it('offers the track even when the layer has no properties to control', async () => {
@@ -307,6 +312,94 @@ describe('MapPanel', () => {
         expect(screen.getByRole('radio', { name: 'None' })).toBeEnabled()
       })
       expect(screen.queryByText(/along the file order/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('story', () => {
+    const rows = [
+      { name: 'a', kind: 'x', d: '1' },
+      { name: 'b', kind: 'x', d: '2' },
+      { name: 'c', kind: 'x', d: '4' },
+      { name: 'd', kind: 'y', d: '9' },
+      { name: 'e', kind: 'y', d: '12' },
+      { name: 'f', kind: 'y', d: '20' },
+    ]
+
+    it('tells what the layer shows and sets the map to show it', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layerWithProperties(rows, ['d', 'kind', 'name'])),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+
+      const story = await screen.findByRole('region', { name: /what you are looking at/i })
+      expect(within(story).getByText('6 points in file order')).toBeInTheDocument()
+
+      await user.click(within(story).getByRole('button', { name: 'Next' }))
+
+      // The chapter is open, so the map is coloured by its property and the control agrees.
+      const colourBy = screen.getByRole('radiogroup', { name: 'Colour by' })
+      expect(within(colourBy).getByRole('radio', { name: 'kind' })).toBeChecked()
+      expect(screen.getByRole('group', { name: 'Legend for kind' })).toBeInTheDocument()
+    })
+
+    it('keeps the map as it is set when a filter narrows the points', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layerWithProperties(rows, ['d', 'kind', 'name'])),
+        '/api/v1/map-layers/layer-1?property=kind&value=x': () => {
+          const whole = layerWithProperties(rows, ['d', 'kind', 'name'])
+          return json({
+            ...whole,
+            features: { ...whole.features, features: whole.features.features.slice(0, 3) },
+          })
+        },
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      const story = await screen.findByRole('region', { name: /what you are looking at/i })
+      await user.click(within(story).getByRole('button', { name: 'Next' }))
+      const colourBy = screen.getByRole('radiogroup', { name: 'Colour by' })
+      expect(within(colourBy).getByRole('radio', { name: 'kind' })).toBeChecked()
+      // The reader changes the map after the chapter set it; a filter must not undo that.
+      await user.click(within(colourBy).getByRole('radio', { name: 'name' }))
+      await user.click(screen.getByRole('button', { name: 'Track' }))
+
+      await user.selectOptions(screen.getByLabelText('Property'), 'kind')
+      await user.type(screen.getByLabelText('Equals'), 'x')
+      await user.click(screen.getByRole('button', { name: 'Apply filter' }))
+      await screen.findByText('good · showing 3 of 6 points')
+
+      expect(
+        within(screen.getByRole('radiogroup', { name: 'Colour by' })).getByRole('radio', {
+          name: 'name',
+        }),
+      ).toBeChecked()
+      expect(screen.getByRole('button', { name: 'Track' })).toHaveAttribute('aria-pressed', 'false')
+      expect(
+        within(screen.getByRole('region', { name: /what you are looking at/i })).getByText('2 / 3'),
+      ).toBeInTheDocument()
+    })
+
+    it('says the same things while a filter narrows the points', async () => {
+      useImportSession.setState({ filter: { property: 'kind', value: 'x' } })
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layerWithProperties(rows, ['d', 'kind', 'name'])),
+        '/api/v1/map-layers/layer-1?property=kind&value=x': () => {
+          const whole = layerWithProperties(rows, ['d', 'kind', 'name'])
+          return json({
+            ...whole,
+            features: { ...whole.features, features: whole.features.features.slice(0, 3) },
+          })
+        },
+      })
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+
+      const story = await screen.findByRole('region', { name: /what you are looking at/i })
+
+      expect(within(story).getByText('6 points in file order')).toBeInTheDocument()
     })
   })
 

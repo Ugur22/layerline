@@ -6,6 +6,7 @@ import { useImportSession } from '@/features/imports/importSession'
 import { useImportJob } from '@/features/imports/useImportJob'
 import { FilterBar } from './FilterBar'
 import { PointInspector } from './PointInspector'
+import { StoryPanel } from './StoryPanel'
 import { useMapLayer } from './useMapLayer'
 
 // MapLibre is large and only needed after an import succeeds, so it stays out of the first load.
@@ -76,7 +77,18 @@ export function MapPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number })
           )}
         </CardContent>
       </Card>
-      {layer.data && <PointInspector features={layer.data.features} />}
+      {layer.data && (
+        <div className="flex flex-col gap-4">
+          {fullLayer.data && (
+            <StoryPanel
+              key={layer.data.map_layer.id}
+              features={fullLayer.data.features.features}
+              propertyKeys={fullLayer.data.map_layer.property_keys}
+            />
+          )}
+          <PointInspector features={layer.data.features} />
+        </div>
+      )}
     </div>
   )
 }

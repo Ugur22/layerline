@@ -1,5 +1,6 @@
 import type { PointFeature } from '@/api/types'
 import { pointColor, propertyText, type DrawableColorScheme } from './layerStyle'
+import { pointLabel } from './pointLabel'
 import { extentOf, niceTicks, profileDomain, runsOf, valuesFor } from './profile'
 
 export interface ProfileRow {
@@ -44,10 +45,9 @@ export function buildProfile(
   const inverted = invertOverride ?? (/depth/i.test(valueKey) && (extent?.[0] ?? 0) >= 0)
 
   const rows = features.map((feature, index): ProfileRow => {
-    const name = feature.properties.name
     return {
       index,
-      label: typeof name === 'string' && name !== '' ? name : `#${String(index + 1)}`,
+      label: pointLabel(feature, index),
       value: values[index] ?? null,
       color: pointColor(scheme, feature.properties),
     }
