@@ -1,0 +1,53 @@
+# Local development only. Credentials below are throwaway dev values, not secrets.
+x-backend: &backend
+  build: ./backend
+  environment:
+    LAYERLINE_ENVIRONMENT: development
+    LAYERLINE_DATABASE_URL: postgresql://layerline:layerline@db:5432/layerline
+    LAYERLINE_STORAGE_DIR: /data/uploads
+  volumes:
+    - ./backend/src:/app/src
+    - uploads:/data/uploads
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  db:
+    # Community multi-arch build: the official postgis/postgis image has no arm64 manifest.
+    image: imresamu/postgis:17-3.5-bookworm
+    environment:
+      POSTGRES_USER: layerline
+      POSTGRES_PASSWORD: layerline
+      POSTGRES_DB: layerline
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U layerline -d layerline"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *backend
+    depends_on:
+      db:
+        condition: service_healthy
+    command: python -m layerline.migrate
+    restart: "no"
+
+  api:
+    <<: *backend
+    command: uvicorn layerline.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  worker:
+    <<: *backend
+    command: procrastinate --app=layerline.jobs.app worker
+
+volumes:
+  pgdata:
+  uploads:
