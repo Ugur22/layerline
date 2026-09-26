@@ -9,7 +9,7 @@ Nothing here is implemented yet. Status labels: **Decided** (accepted ADR) / **A
 | Repo layout and tooling | Decided ([0001](decisions/0001-repo-layout-and-tooling.md)) | One repo, independent `frontend/` and `backend/` packages; no monorepo tool. Frontend: Vite, React, strict TypeScript, npm ([0008](decisions/0008-npm-as-frontend-package-manager.md)), Vitest, ESLint + Prettier. Backend: Python 3.12+, uv, Ruff, mypy, pytest, Alembic |
 | UI toolkit | Decided ([0004](decisions/0004-frontend-ui-toolkit.md)) | Tailwind CSS + shadcn/ui (Radix), TanStack Table for tables |
 | Client state and data | Decided ([0005](decisions/0005-client-state-and-data-fetching.md)) | TanStack Query (server state), Zustand (UI state), ts-pattern for exhaustive matching |
-| Map | Decided ([0006](decisions/0006-map-stack.md)) | MapLibre GL via `react-map-gl`; deck.gl deferred until measured need |
+| Map | Decided ([0006](decisions/0006-map-stack.md), [0009](decisions/0009-basemap-tile-source.md)) | MapLibre GL via `react-map-gl`; basemap style URL from config; deck.gl deferred until measured need |
 | Backend | Decided ([0007](decisions/0007-backend-database-and-local-dev.md)) | Python, FastAPI, JSON over HTTP |
 | Database | Decided ([0007](decisions/0007-backend-database-and-local-dev.md)) | PostgreSQL + PostGIS |
 | Import processing | Decided ([0002](decisions/0002-import-jobs-and-file-storage.md)), pending spike | Procrastinate (Postgres-backed) with a separate worker; retries with backoff; periodic maintenance tasks. Falls back to Celery + Redis if the spike fails |
@@ -48,7 +48,7 @@ Browser (React) ──HTTP──▶ API (FastAPI) ──▶ PostgreSQL/PostGIS
 | # | Question | Notes |
 |---|---|---|
 | 1 | Large-layer data delivery | Inline GeoJSON, bbox queries, or vector tiles; needs measurement first. deck.gl adoption depends on this |
-| 2 | Basemap tile source | Provider, terms, cost, key handling |
+| 2 | Basemap tile source | Resolved for local development by [0009](decisions/0009-basemap-tile-source.md) (configurable style URL, OpenFreeMap default); re-check terms before any deployment |
 | 3 | End-to-end test runner | Playwright or Cypress |
 | 4 | Real authentication and roles | Replaces the placeholder identity via a later ADR |
 | 5 | Row-level security | Deferred (ADR 0003) |
