@@ -52,3 +52,4 @@ What becomes easier, harder, or required. Follow-ups.
 - [0007 Backend framework, database, and local development](0007-backend-database-and-local-dev.md) — accepted
 - [0008 npm as the frontend package manager](0008-npm-as-frontend-package-manager.md) — accepted
 - [0009 Basemap tile source](0009-basemap-tile-source.md) — accepted
+- [0010 Playwright for end-to-end tests](0010-playwright-for-end-to-end-tests.md) — accepted

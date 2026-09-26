@@ -49,7 +49,7 @@ Browser (React) ──HTTP──▶ API (FastAPI) ──▶ PostgreSQL/PostGIS
 |---|---|---|
 | 1 | Large-layer data delivery | Inline GeoJSON, bbox queries, or vector tiles; needs measurement first. deck.gl adoption depends on this |
 | 2 | Basemap tile source | Resolved for local development by [0009](decisions/0009-basemap-tile-source.md) (configurable style URL, OpenFreeMap default); re-check terms before any deployment |
-| 3 | End-to-end test runner | Playwright or Cypress |
+| 3 | End-to-end test runner | Resolved by [0010](decisions/0010-playwright-for-end-to-end-tests.md): Playwright |
 | 4 | Real authentication and roles | Replaces the placeholder identity via a later ADR |
 | 5 | Row-level security | Deferred (ADR 0003) |
 | 6 | Root task runner | Makefile or `just` |
