@@ -1,10 +1,16 @@
-import { match } from 'ts-pattern'
+import { match, P } from 'ts-pattern'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import type { ImportJob } from '@/api/types'
+import type { ImportIssue, ImportJob } from '@/api/types'
 
-function issueLabel(index: number | undefined): string {
-  return index === undefined ? 'File' : `Feature ${String(index + 1)}`
+function issueLabel(location: ImportIssue['location']): string {
+  return match(location)
+    .with(
+      { feature_index: P.number },
+      ({ feature_index }) => `Feature ${String(feature_index + 1)}`,
+    )
+    .with({ row: P.number }, ({ row }) => `Row ${String(row)}`)
+    .otherwise(() => 'File')
 }
 
 export function ImportResult({ job }: { job: ImportJob }) {
@@ -27,7 +33,7 @@ export function ImportResult({ job }: { job: ImportJob }) {
             <ul className="list-disc pl-4">
               {job.errors.map((issue, i) => (
                 <li key={i}>
-                  {issueLabel(issue.location?.feature_index)}: {issue.message}{' '}
+                  {issueLabel(issue.location)}: {issue.message}{' '}
                   <span className="text-xs opacity-70">({issue.code})</span>
                 </li>
               ))}

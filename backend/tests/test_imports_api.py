@@ -265,3 +265,74 @@ async def test_layer_with_null_properties_has_no_property_keys(
 
     assert body["map_layer"]["property_keys"] == []
     assert len(body["features"]["features"]) == 1
+
+
+async def test_csv_upload_becomes_a_filterable_map_layer(client: httpx2.AsyncClient) -> None:
+    csv_data = b"name,lat,lon,type\nStation 1,52.37,4.9,buoy\nStation 2,52.4,4.95,mooring\n"
+    job_id = await upload(client, csv_data, "Survey.CSV")
+
+    await process_queue()
+
+    job = await status(client, job_id)
+    assert job["status"] == "succeeded"
+    assert job["feature_count"] == 2
+    layer_url = f"/api/v1/map-layers/{job['map_layer_id']}"
+    layer = (await client.get(layer_url)).json()
+    assert layer["map_layer"]["name"] == "Survey"
+    assert layer["map_layer"]["bbox"] == [4.9, 52.37, 4.95, 52.4]
+    assert layer["map_layer"]["property_keys"] == ["name", "type"]
+    filtered = (await client.get(f"{layer_url}?property=type&value=buoy")).json()
+    assert [f["properties"]["name"] for f in filtered["features"]["features"]] == ["Station 1"]
+
+
+async def test_invalid_csv_fails_with_spreadsheet_row_numbers(client: httpx2.AsyncClient) -> None:
+    job_id = await upload(client, b"lat,lon\n52.4,4.9\n999,4.9\n52.5\n", "bad.csv")
+
+    await process_queue()
+
+    job = await status(client, job_id)
+    assert job["status"] == "failed"
+    assert [(e["code"], e["location"]) for e in job["errors"]] == [
+        ("invalid_geometry", {"row": 3}),
+        ("invalid_row", {"row": 4}),
+    ]
+    assert job["map_layer_id"] is None
+    assert run_sql("SELECT count(*) FROM spatial_features") == [(0,)]
+
+
+async def test_semicolon_csv_is_a_file_level_error(client: httpx2.AsyncClient) -> None:
+    job_id = await upload(client, b"lat;lon\n52,4;4,9\n", "eu.csv")
+
+    await process_queue()
+
+    job = await status(client, job_id)
+    assert job["status"] == "failed"
+    assert job["errors"][0]["code"] == "invalid_csv"
+    assert job["errors"][0]["location"] is None
+    assert "comma" in job["errors"][0]["message"].lower()
+
+
+async def test_long_csv_filename_is_still_parsed_as_csv(client: httpx2.AsyncClient) -> None:
+    name = "s" * 300 + ".csv"
+    job_id = await upload(client, b"lat,lon\n52.4,4.9\n", name)
+
+    await process_queue()
+
+    job = await status(client, job_id)
+    assert job["status"] == "succeeded", job["errors"]
+    assert job["original_filename"].endswith(".csv")
+    assert len(job["original_filename"]) <= 255
+
+
+async def test_data_the_database_cannot_store_fails_the_job_instead_of_hanging(
+    client: httpx2.AsyncClient,
+) -> None:
+    # PostgreSQL jsonb cannot hold NUL characters; the CSV parser lets them through.
+    job_id = await upload(client, b"lat,lon,note\n52.4,4.9,bad\x00value\n", "nul.csv")
+
+    await process_queue()
+
+    job = await status(client, job_id)
+    assert job["status"] == "failed"
+    assert job["errors"][0]["code"] == "invalid_data"
+    assert run_sql("SELECT count(*) FROM spatial_features") == [(0,)]

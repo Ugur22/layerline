@@ -4,7 +4,7 @@ Layerline is a spatial-data operations platform: users upload GeoJSON/CSV survey
 
 ## Current phase
 
-**Phase 1 — first vertical slice.** Backend (FastAPI, PostGIS, Procrastinate worker, Compose) and frontend (React, MapLibre) implement upload → import job → imports list → map layer with a property filter. End-to-end tests exist (`make e2e`); no CI yet. Docs in `docs/architecture.md` and `docs/api-contracts.md` mark what is decided; anything still labelled Assumption or Open is not a fact about the codebase.
+**Phase 1 — first vertical slice.** Backend (FastAPI, PostGIS, Procrastinate worker, Compose) and frontend (React, MapLibre) implement upload (GeoJSON points or CSV) → import job → imports list → map layer with a property filter. End-to-end tests exist (`make e2e`); no CI yet. Docs in `docs/architecture.md` and `docs/api-contracts.md` mark what is decided; anything still labelled Assumption or Open is not a fact about the codebase.
 
 ## Docs index (read only what your task needs)
 

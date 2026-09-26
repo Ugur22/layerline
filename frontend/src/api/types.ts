@@ -5,7 +5,9 @@ export type ImportStatus = 'queued' | 'processing' | 'succeeded' | 'failed'
 export interface ImportIssue {
   code: string
   message: string
-  location: { feature_index: number } | null
+  // feature_index: 0-based GeoJSON position; row: 1-based spreadsheet row (header is row 1);
+  // null: the whole file. Clients must tolerate shapes they do not know.
+  location: { feature_index: number } | { row: number } | null
 }
 
 export interface ImportJob {

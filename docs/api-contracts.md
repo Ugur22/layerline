@@ -29,11 +29,12 @@ Success `202 Accepted`:
 { "import_job": { "id": "…", "dataset_id": "…", "original_filename": "…", "status": "queued", "created_at": "…" } }
 ```
 
-Errors: `400 unsupported_file_type`, `413 file_too_large`, `404 not_found` (dataset), `401`/`403`.
+Errors: `400 unsupported_file_type` (anything but the types above), `413 file_too_large`, `404 not_found` (dataset), `401`/`403`.
 
 Notes:
 - Returns before processing; file content is not validated beyond type and size at this stage.
-- Accepted types in the first slice: GeoJSON (`.geojson`, `.json`). CSV later.
+- The stored `original_filename` is limited to 255 characters; longer names are shortened but keep their extension.
+- Accepted types: GeoJSON (`.geojson`, `.json`) and CSV (`.csv`, see "CSV format" below). The type is decided by the file extension, checked case-insensitively.
 - Size limit: **Open**.
 
 ## 2. Get import status
@@ -64,7 +65,18 @@ Notes:
 - `status`: `queued | processing | succeeded | failed`.
 - `feature_count` and `map_layer_id` are non-null only when `succeeded`; `errors` is non-empty only when `failed`.
 - `errors` may be truncated; if so, `errors_truncated: true` (Open: cap).
+- An error's `location` is one of: `{ "feature_index": n }` (GeoJSON, 0-based position in `features`), `{ "row": n }` (CSV, 1-based spreadsheet row where the header is row 1), or `null` for a whole-file problem. Clients must handle all three.
+- Import error codes (clients branch on `code`; unknown codes must render safely): `invalid_json`, `not_a_feature_collection`, `empty_collection`, `invalid_feature`, `invalid_properties`, `unsupported_geometry`, `invalid_geometry` (also used for CSV coordinates that are missing, non-numeric, or outside WGS84 range), `invalid_csv`, `missing_column`, `invalid_row`, `invalid_data` (the database rejected the content, e.g. NUL characters), `stored_file_missing`, `timed_out`, `processing_error`.
 - Errors: `404 not_found`.
+
+### CSV format
+
+- UTF-8 (a leading BOM is accepted), comma-delimited, first row is the header, decimal separator `.`. Blank lines and rows whose cells are all empty are ignored, but still count in row numbers. Columns with an empty header are ignored, and two columns with the same name are `invalid_csv`.
+- Coordinates come from one latitude column (`lat` or `latitude`) and one longitude column (`lon`, `lng` or `longitude`); names are matched case-insensitively after trimming. Zero or several matches for either is an error (`missing_column` / `invalid_csv`).
+- Every other column becomes a feature property. Values are stored as text; empty cells are omitted from a feature's properties.
+- Undecodable bytes, a cell longer than 131,072 characters, or more than 100 columns are `invalid_csv`. The number of rows is bounded only by the file size limit (Open, as for GeoJSON). A semicolon- or tab-delimited file is reported as `invalid_csv` with a hint to export "CSV UTF-8 (comma delimited)".
+- As with GeoJSON, an import is all-or-nothing: any error means no features are stored. A CSV with no data rows (a header only, or an empty file) is `empty_collection`.
+- A row with the wrong number of cells is `invalid_row`; bad coordinates are `invalid_geometry`. Both carry `location.row`.
 
 ## 3. Get a map layer
 

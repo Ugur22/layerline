@@ -9,14 +9,18 @@ function sample(name: string): Buffer {
 }
 
 // Unique names keep the tests independent of whatever the development database already holds.
-function uniqueName(label: string): string {
-  return `e2e-${label}-${String(Date.now())}-${Math.random().toString(36).slice(2, 7)}.geojson`
+function uniqueName(label: string, extension = 'geojson'): string {
+  return `e2e-${label}-${String(Date.now())}-${Math.random().toString(36).slice(2, 7)}.${extension}`
+}
+
+function stemOf(name: string): string {
+  return name.replace(/\.[^.]+$/, '')
 }
 
 async function upload(page: Page, sampleFile: string, name: string) {
   await page.locator('input[type=file]').setInputFiles({
     name,
-    mimeType: 'application/geo+json',
+    mimeType: name.endsWith('.csv') ? 'text/csv' : 'application/geo+json',
     buffer: sample(sampleFile),
   })
   await page.getByRole('button', { name: 'Upload' }).click()
@@ -53,7 +57,7 @@ test('a valid upload becomes a list entry and a rendered map', async ({ page }) 
   await upload(page, 'survey-points.geojson', name)
 
   await expect(page.getByText('Import succeeded')).toBeVisible()
-  const stem = name.replace('.geojson', '')
+  const stem = stemOf(name)
   await expect(page.getByText(`${stem} · 5 points`)).toBeVisible()
   await expect(page.getByRole('button', { name: new RegExp(name) })).toContainText('Succeeded')
   await expect(page.locator('canvas.maplibregl-canvas')).toBeVisible()
@@ -64,7 +68,7 @@ test('a valid upload becomes a list entry and a rendered map', async ({ page }) 
 
 test('the property filter narrows the map and can be cleared', async ({ page }) => {
   const name = uniqueName('filter')
-  const stem = name.replace('.geojson', '')
+  const stem = stemOf(name)
   await upload(page, 'survey-points.geojson', name)
   await expect(page.getByText(`${stem} · 5 points`)).toBeVisible()
 
@@ -92,17 +96,41 @@ test('imports survive a reload and an older one can be reopened', async ({ page 
   const older = uniqueName('older')
   const newer = uniqueName('newer')
   await upload(page, 'survey-points.geojson', older)
-  await expect(page.getByText(`${older.replace('.geojson', '')} · 5 points`)).toBeVisible()
+  await expect(page.getByText(`${stemOf(older)} · 5 points`)).toBeVisible()
   await upload(page, 'good.geojson', newer)
-  await expect(page.getByText(`${newer.replace('.geojson', '')} · 2 points`)).toBeVisible()
+  await expect(page.getByText(`${stemOf(newer)} · 2 points`)).toBeVisible()
 
   await page.reload()
   await expect(page.getByRole('button', { name: new RegExp(older) })).toBeVisible()
   await page.getByRole('button', { name: new RegExp(older) }).click()
 
-  await expect(page.getByText(`${older.replace('.geojson', '')} · 5 points`)).toBeVisible()
+  await expect(page.getByText(`${stemOf(older)} · 5 points`)).toBeVisible()
   await expect(page.getByRole('button', { name: new RegExp(older) })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
+})
+
+test('a CSV upload becomes a layer that can be filtered', async ({ page }) => {
+  const name = uniqueName('csv', 'csv')
+  const stem = stemOf(name)
+
+  await upload(page, 'survey-points.csv', name)
+
+  await expect(page.getByText(`${stem} · 5 points`)).toBeVisible()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+  await page.getByLabel('Property').selectOption('type')
+  await page.getByLabel('Equals').fill('buoy')
+  await page.getByRole('button', { name: 'Apply filter' }).click()
+  await expect(page.getByText(`${stem} · showing 2 of 5 points`)).toBeVisible()
+})
+
+test('an invalid CSV reports spreadsheet row numbers', async ({ page }) => {
+  await upload(page, 'bad-rows.csv', uniqueName('badcsv', 'csv'))
+
+  await expect(page.getByText(/Import failed\. No features were saved/)).toBeVisible()
+  await expect(page.getByText(/Row 3: Latitude is missing or not a number/)).toBeVisible()
+  await expect(page.getByText(/Row 4: Expected 3 columns, found 2/)).toBeVisible()
+  await expect(page.getByText(/Row 5: Coordinates are outside WGS84 range/)).toBeVisible()
+  await expect(page.locator('canvas.maplibregl-canvas')).toHaveCount(0)
 })

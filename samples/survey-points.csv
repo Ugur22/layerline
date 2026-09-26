@@ -1,0 +1,6 @@
+name,lat,lon,type,depth_m
+Station 1,52.3702,4.8952,buoy,12
+Station 2,52.3676,4.9041,buoy,8
+Station 3,52.3731,4.9182,mooring,12
+Station 4,52.3599,4.8837,mooring,20
+Station 5,52.3555,4.9290,sensor,5

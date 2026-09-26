@@ -29,10 +29,10 @@ export function UploadPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <label className="flex flex-col gap-1 text-sm">
-          GeoJSON file
+          Survey data file (GeoJSON or CSV)
           <input
             type="file"
-            accept=".geojson,.json"
+            accept=".geojson,.json,.csv"
             onChange={(event) => {
               setFile(event.target.files?.[0] ?? null)
             }}

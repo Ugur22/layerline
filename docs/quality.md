@@ -14,6 +14,8 @@ Backend, frontend and end-to-end checks exist. `make check` runs the first two (
 | `make check` | Backend and frontend check suites |
 | `make e2e` | Playwright against the real UI, API, worker and PostGIS (needs `make up`; starts its own frontend dev server on port 5199) |
 
+The API reloads on code changes; the Compose worker does not. After changing import or job code, run `docker compose restart worker` before exercising the stack (e2e or by hand), or you are testing old code.
+
 Backend tests run against a real PostGIS database (`layerline_test`, recreated each session) and the real Procrastinate worker; they never touch the development database.
 
 ## Principles
@@ -42,6 +44,7 @@ Backend tests run against a real PostGIS database (`layerline_test`, recreated e
 - Authorization: every endpoint has a test that a caller outside the owning organisation gets `404`.
 - Tests must not depend on execution order or shared mutable state.
 - Do not mock the database for behaviour that depends on PostGIS.
+- Every way the database can reject upload content (constraints, jsonb limits such as NUL characters) must end the job `failed` with an error code, never leave it `processing`. Test with a real hostile input, not a mocked exception.
 - Queue behaviour is tested with the real worker (`run_worker_async(wait=False)`): retry then success, retries exhausted ending in a `failed` job, and idempotent reprocessing. Note that the worker also defers the periodic task, so assertions on `procrastinate_jobs` filter by `task_name`.
 
 ## Frontend test expectations

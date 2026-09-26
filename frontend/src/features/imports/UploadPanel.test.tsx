@@ -46,7 +46,7 @@ function mockApi(upload: Response, polls: ImportJob[]) {
 
 async function chooseAndUpload(name = 'good.geojson') {
   const user = userEvent.setup()
-  await user.upload(screen.getByLabelText(/geojson file/i), new File(['{}'], name))
+  await user.upload(screen.getByLabelText(/survey data file/i), new File(['{}'], name))
   await user.click(screen.getByRole('button', { name: 'Upload' }))
 }
 
@@ -66,7 +66,10 @@ describe('UploadPanel', () => {
     renderWithClient(<UploadPanel pollIntervalMs={POLL_MS} />)
     expect(screen.getByRole('button', { name: 'Upload' })).toBeDisabled()
 
-    await userEvent.upload(screen.getByLabelText(/geojson file/i), new File(['{}'], 'a.geojson'))
+    await userEvent.upload(
+      screen.getByLabelText(/survey data file/i),
+      new File(['{}'], 'a.geojson'),
+    )
 
     expect(screen.getByRole('button', { name: 'Upload' })).toBeEnabled()
   })
@@ -148,5 +151,47 @@ describe('UploadPanel', () => {
     await waitFor(() => {
       expect(screen.getByText('Unknown status')).toBeInTheDocument()
     })
+  })
+
+  it('accepts CSV files and labels errors with spreadsheet row numbers', async () => {
+    mockApi(json({ import_job: job({}) }, 202), [
+      job({
+        status: 'failed',
+        errors: [
+          { code: 'invalid_geometry', message: 'Latitude is missing.', location: { row: 4 } },
+          { code: 'missing_column', message: 'Missing longitude column.', location: null },
+        ],
+      }),
+    ])
+    renderWithClient(<UploadPanel pollIntervalMs={POLL_MS} />)
+    expect(screen.getByLabelText(/survey data file/i)).toHaveAttribute(
+      'accept',
+      expect.stringContaining('.csv'),
+    )
+
+    await chooseAndUpload('survey.csv')
+
+    expect(await screen.findByText(/Row 4: Latitude is missing/)).toBeInTheDocument()
+    expect(screen.getByText(/File: Missing longitude column/)).toBeInTheDocument()
+  })
+
+  it('renders an error location it does not know as a whole-file error', async () => {
+    mockApi(json({ import_job: job({}) }, 202), [
+      job({
+        status: 'failed',
+        errors: [
+          {
+            code: 'future_code',
+            message: 'Something new.',
+            location: { sheet: 2 } as unknown as { row: number },
+          },
+        ],
+      }),
+    ])
+    renderWithClient(<UploadPanel pollIntervalMs={POLL_MS} />)
+
+    await chooseAndUpload()
+
+    expect(await screen.findByText(/File: Something new/)).toBeInTheDocument()
   })
 })

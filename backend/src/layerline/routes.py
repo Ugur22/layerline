@@ -31,7 +31,18 @@ Ctx = Annotated[RequestContext, Depends(get_context)]
 Session = Annotated[AsyncSession, Depends(get_session)]
 Storage = Annotated[LocalStorage, Depends(get_storage)]
 
-ALLOWED_SUFFIXES = {".geojson", ".json"}
+MAX_FILENAME_LENGTH = 255
+
+
+def _display_name(filename: str) -> str:
+    """Truncate for storage without losing the extension: it selects the parser at import time."""
+    if len(filename) <= MAX_FILENAME_LENGTH:
+        return filename
+    suffix = PurePath(filename).suffix
+    return filename[: MAX_FILENAME_LENGTH - len(suffix)] + suffix
+
+
+ALLOWED_SUFFIXES = {".geojson", ".json", ".csv"}
 
 
 def _not_found(what: str) -> ApiError:
@@ -108,7 +119,9 @@ async def upload_import(
 
     filename = file.filename or ""
     if PurePath(filename).suffix.lower() not in ALLOWED_SUFFIXES:
-        raise ApiError(400, "unsupported_file_type", "Only .geojson or .json files are accepted.")
+        raise ApiError(
+            400, "unsupported_file_type", "Only .geojson, .json or .csv files are accepted."
+        )
 
     limit = get_settings().max_upload_bytes
     data = await file.read(limit + 1)
@@ -120,7 +133,7 @@ async def upload_import(
         organisation_id=ctx.organisation_id,
         dataset_id=dataset_id,
         stored_path=key,
-        original_filename=filename[:255],
+        original_filename=_display_name(filename),
     )
     session.add(job)
     await session.commit()
