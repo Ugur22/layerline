@@ -7,7 +7,7 @@ The three endpoints below are implemented in the backend; the frontend does not 
 - Base path `/api/v1`; JSON bodies except file upload (`multipart/form-data`).
 - Field names `snake_case`; timestamps ISO 8601 UTC; ids are opaque strings.
 - Errors use one shape (below) with a stable machine-readable `code`; clients branch on `code`, never on `message`.
-- Every response for an entity includes its `id`; list endpoints are paginated when they can grow (Open: cursor vs. offset).
+- Every response for an entity includes its `id`. List endpoints use cursor pagination (`limit`, `cursor` query params; response carries `next_cursor`, null on the last page). Cursors are opaque: clients never build or parse them.
 - Authentication scheme: **Open** (see `architecture.md`). Every endpoint below assumes an authenticated caller scoped to one organisation, and returns `404` for entities outside it.
 - Breaking changes require a new version path or an ADR.
 
@@ -26,7 +26,7 @@ Initial codes: `validation_failed`, `not_found`, `unsupported_file_type`, `file_
 Success `202 Accepted`:
 
 ```json
-{ "import_job": { "id": "…", "dataset_id": "…", "status": "queued", "created_at": "…" } }
+{ "import_job": { "id": "…", "dataset_id": "…", "original_filename": "…", "status": "queued", "created_at": "…" } }
 ```
 
 Errors: `400 unsupported_file_type`, `413 file_too_large`, `404 not_found` (dataset), `401`/`403`.
@@ -47,6 +47,7 @@ Notes:
   "import_job": {
     "id": "…",
     "dataset_id": "…",
+    "original_filename": "…",
     "status": "failed",
     "created_at": "…",
     "finished_at": "…",
@@ -59,6 +60,7 @@ Notes:
 }
 ```
 
+- `original_filename` is the client's name for the file, kept for display only.
 - `status`: `queued | processing | succeeded | failed`.
 - `feature_count` and `map_layer_id` are non-null only when `succeeded`; `errors` is non-empty only when `failed`.
 - `errors` may be truncated; if so, `errors_truncated: true` (Open: cap).
@@ -78,18 +80,40 @@ Notes:
     "name": "…",
     "geometry_type": "Point",
     "feature_count": 120,
-    "bbox": [4.85, 52.35, 4.95, 52.40]
+    "bbox": [4.85, 52.35, 4.95, 52.40],
+    "property_keys": ["name", "depth_m"]
   },
   "features": { "type": "FeatureCollection", "features": [] }
 }
 ```
 
 - Coordinates are `[longitude, latitude]` in WGS84 (Assumption).
-- Returning all features inline is acceptable for the first slice only; the approach for large layers (bbox filter, tiles, pagination) is **Open** (`architecture.md` open decision #1). Do not add filtering parameters until the slice works.
-- Errors: `404 not_found`.
+- Optional exact-match filter: `?property=<key>&value=<text>`. Both or neither; one without the other is `400 validation_failed`. A feature matches when its property's text form equals `value` (`1` matches `"1"`, `true` matches `"true"`). Limits (provisional): `property` up to 100 characters, `value` up to 500; longer is `400 validation_failed`. Both are passed to the database as bound parameters, never concatenated into SQL. No match returns an empty `features` array, not an error.
+- `feature_count`, `bbox` and `property_keys` always describe the whole layer, so the view does not shift while filtering. The number of features returned is `features.features.length`.
+- `property_keys`: distinct property names across the layer's features, sorted, capped at 50.
+- Returning all matching features inline is acceptable for the first slice only; the approach for large layers (bbox filter, tiles, pagination) is **Open** (`architecture.md` open decision #1).
+- Errors: `400 validation_failed`, `404 not_found`.
+
+## 4. List imports of a dataset
+
+`GET /api/v1/datasets/{dataset_id}/imports?limit=20&cursor=…`
+
+`200 OK`:
+
+```json
+{
+  "import_jobs": [ { "id": "…", "original_filename": "…", "status": "succeeded", "map_layer_id": "…" } ],
+  "next_cursor": "…"
+}
+```
+
+- Each item has the same shape as an import job in section 2.
+- Newest first (by `created_at`, ties broken by `id`). `limit` default 20, maximum 100. An invalid `cursor` or `limit` is `400 validation_failed`.
+- This list is how clients discover a dataset's map layers (`map_layer_id` on succeeded jobs); there is no separate map-layer list endpoint.
+- Errors: `400 validation_failed`, `404 not_found` (dataset missing or in another organisation).
 
 ## Open questions
 
 - Should upload and layer retrieval be addressable by dataset instead of opaque job/layer ids?
-- Is a `GET /datasets/{id}/map-layers` list needed in the first slice?
+- Decided: no separate `GET /datasets/{id}/map-layers`; the import list carries `map_layer_id`.
 - Idempotency key on upload to avoid duplicate jobs on client retry?

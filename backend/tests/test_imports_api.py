@@ -128,6 +128,125 @@ async def test_openapi_describes_real_responses(client: httpx2.AsyncClient) -> N
 
     upload = schema["paths"]["/api/v1/datasets/{dataset_id}/imports"]["post"]["responses"]
     assert set(upload) == {"202", "400", "401", "404", "413"}
+    listing = schema["paths"]["/api/v1/datasets/{dataset_id}/imports"]["get"]["responses"]
+    assert set(listing) == {"200", "400", "401", "404"}
     assert "HTTPValidationError" not in schema["components"]["schemas"]
     job = schema["components"]["schemas"]["ImportJobOut"]
     assert job["properties"]["status"]["enum"] == ["queued", "processing", "succeeded", "failed"]
+
+
+def geojson_with_properties(*items: tuple[list[float], dict[str, Any]]) -> bytes:
+    features = [
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": c}, "properties": p}
+        for c, p in items
+    ]
+    return json.dumps({"type": "FeatureCollection", "features": features}).encode()
+
+
+async def imported_layer_id(client: httpx2.AsyncClient, data: bytes) -> str:
+    job_id = await upload(client, data)
+    await process_queue()
+    layer_id = (await status(client, job_id))["map_layer_id"]
+    assert layer_id is not None
+    return str(layer_id)
+
+
+async def test_list_imports_is_newest_first_and_paginated(client: httpx2.AsyncClient) -> None:
+    for name in ("first.geojson", "second.geojson", "third.geojson"):
+        await upload(client, geojson([1, 2]), name)
+
+    page1 = (await client.get(f"{UPLOAD}?limit=2")).json()
+    assert [j["original_filename"] for j in page1["import_jobs"]] == [
+        "third.geojson",
+        "second.geojson",
+    ]
+    assert page1["next_cursor"] is not None
+
+    page2 = (await client.get(f"{UPLOAD}?limit=2&cursor={page1['next_cursor']}")).json()
+    assert [j["original_filename"] for j in page2["import_jobs"]] == ["first.geojson"]
+    assert page2["next_cursor"] is None
+
+
+async def test_list_imports_exposes_layer_ids_only_for_succeeded_jobs(
+    client: httpx2.AsyncClient,
+) -> None:
+    await upload(client, geojson([1, 2]), "queued.geojson")
+    await process_queue()
+    await upload(client, geojson([1, 2]), "waiting.geojson")
+
+    jobs = (await client.get(UPLOAD)).json()["import_jobs"]
+
+    by_name = {j["original_filename"]: j for j in jobs}
+    assert by_name["queued.geojson"]["status"] == "succeeded"
+    assert by_name["queued.geojson"]["map_layer_id"] is not None
+    assert by_name["waiting.geojson"]["status"] == "queued"
+    assert by_name["waiting.geojson"]["map_layer_id"] is None
+
+
+async def test_list_imports_rejects_bad_input_and_other_organisations(
+    client: httpx2.AsyncClient,
+) -> None:
+    await upload(client, geojson([1, 2]))
+
+    for query in ("?limit=0", "?limit=101", "?cursor=not-a-cursor"):
+        response = await client.get(f"{UPLOAD}{query}")
+        assert response.status_code == 400, query
+        assert response.json()["error"]["code"] == "validation_failed"
+
+    assert (await client.get(UPLOAD, headers=OTHER_ORG)).status_code == 404
+    missing = "/api/v1/datasets/00000000-0000-4000-8000-0000000000ff/imports"
+    assert (await client.get(missing)).status_code == 404
+
+
+async def test_layer_filter_matches_exact_property_values(client: httpx2.AsyncClient) -> None:
+    layer_id = await imported_layer_id(
+        client,
+        geojson_with_properties(
+            ([1, 1], {"name": "A", "depth": 5}),
+            ([2, 2], {"name": "B", "depth": 5}),
+            ([3, 3], {"name": "A"}),
+        ),
+    )
+
+    def matched(body: dict[str, Any]) -> list[str]:
+        return sorted(f["properties"]["name"] for f in body["features"]["features"])
+
+    by_name = (await client.get(f"/api/v1/map-layers/{layer_id}?property=name&value=A")).json()
+    assert matched(by_name) == ["A", "A"]
+    # The layer's own facts describe the whole layer, so the view does not move while filtering.
+    assert by_name["map_layer"]["feature_count"] == 3
+    assert by_name["map_layer"]["bbox"] == [1.0, 1.0, 3.0, 3.0]
+    assert by_name["map_layer"]["property_keys"] == ["depth", "name"]
+
+    by_number = (await client.get(f"/api/v1/map-layers/{layer_id}?property=depth&value=5")).json()
+    assert matched(by_number) == ["A", "B"]
+
+    none = (await client.get(f"/api/v1/map-layers/{layer_id}?property=name&value=Z")).json()
+    assert none["features"]["features"] == []
+    assert none["map_layer"]["feature_count"] == 3
+
+
+async def test_layer_filter_validates_input_and_treats_keys_as_data(
+    client: httpx2.AsyncClient,
+) -> None:
+    layer_id = await imported_layer_id(client, geojson_with_properties(([1, 1], {"name": "A"})))
+
+    for query in ("?property=name", "?value=A", f"?property={'k' * 101}&value=A"):
+        response = await client.get(f"/api/v1/map-layers/{layer_id}{query}")
+        assert response.status_code == 400, query
+        assert response.json()["error"]["code"] == "validation_failed"
+
+    hostile = "name' OR '1'='1"
+    response = await client.get(
+        f"/api/v1/map-layers/{layer_id}", params={"property": hostile, "value": "A"}
+    )
+    assert response.status_code == 200
+    assert response.json()["features"]["features"] == []
+
+
+async def test_layer_without_properties_has_no_property_keys(client: httpx2.AsyncClient) -> None:
+    layer_id = await imported_layer_id(client, geojson([1, 2]))
+
+    body = (await client.get(f"/api/v1/map-layers/{layer_id}")).json()
+
+    assert body["map_layer"]["property_keys"] == ["i"]

@@ -1,10 +1,12 @@
+import base64
 import json
 import uuid
+from datetime import datetime
 from pathlib import PurePath
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, UploadFile
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, Query, UploadFile
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from layerline.config import get_settings
@@ -16,6 +18,7 @@ from layerline.models import Dataset, ImportJob, MapLayer, SpatialFeature
 from layerline.schemas import (
     ErrorResponse,
     Health,
+    ImportJobListResponse,
     ImportJobOut,
     ImportJobResponse,
     MapLayerResponse,
@@ -41,6 +44,7 @@ def _job_out(job: ImportJob, map_layer_id: uuid.UUID | None) -> ImportJobOut:
         {
             "id": job.id,
             "dataset_id": job.dataset_id,
+            "original_filename": job.original_filename,
             "status": job.status,
             "created_at": job.created_at,
             "finished_at": job.finished_at,
@@ -50,6 +54,22 @@ def _job_out(job: ImportJob, map_layer_id: uuid.UUID | None) -> ImportJobOut:
             "errors_truncated": job.errors_truncated,
         }
     )
+
+
+MAX_PROPERTY_KEYS = 50
+
+
+def _encode_cursor(job: ImportJob) -> str:
+    raw = f"{job.created_at.isoformat()}|{job.id}"
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
+    try:
+        created_at, job_id = base64.urlsafe_b64decode(cursor.encode()).decode().split("|")
+        return datetime.fromisoformat(created_at), uuid.UUID(job_id)
+    except ValueError:
+        raise ApiError(400, "validation_failed", "Invalid cursor.") from None
 
 
 ERRORS: dict[int | str, dict[str, Any]] = {
@@ -105,6 +125,44 @@ async def upload_import(
     return ImportJobResponse(import_job=_job_out(job, None))
 
 
+@router.get("/datasets/{dataset_id}/imports", responses=ERRORS)
+async def list_imports(
+    dataset_id: uuid.UUID,
+    ctx: Ctx,
+    session: Session,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    cursor: Annotated[str | None, Query(max_length=200)] = None,
+) -> ImportJobListResponse:
+    dataset = (
+        await session.execute(
+            select(Dataset.id).where(
+                Dataset.id == dataset_id, Dataset.organisation_id == ctx.organisation_id
+            )
+        )
+    ).scalar_one_or_none()
+    if dataset is None:
+        raise _not_found("Dataset")
+
+    query = (
+        select(ImportJob, MapLayer.id)
+        .outerjoin(MapLayer, MapLayer.import_job_id == ImportJob.id)
+        .where(ImportJob.dataset_id == dataset_id, ImportJob.organisation_id == ctx.organisation_id)
+        .order_by(ImportJob.created_at.desc(), ImportJob.id.desc())
+        .limit(limit + 1)
+    )
+    if cursor is not None:
+        created_at, job_id = _decode_cursor(cursor)
+        query = query.where(tuple_(ImportJob.created_at, ImportJob.id) < tuple_(created_at, job_id))
+    rows = (await session.execute(query)).all()
+
+    page = rows[:limit]
+    return ImportJobListResponse(
+        import_jobs=[_job_out(job, layer_id) for job, layer_id in page],
+        # A next page exists only if the extra probe row came back.
+        next_cursor=_encode_cursor(page[-1][0]) if len(rows) > limit else None,
+    )
+
+
 @router.get("/imports/{import_job_id}", responses=ERRORS)
 async def get_import(import_job_id: uuid.UUID, ctx: Ctx, session: Session) -> ImportJobResponse:
     row = (
@@ -120,7 +178,15 @@ async def get_import(import_job_id: uuid.UUID, ctx: Ctx, session: Session) -> Im
 
 
 @router.get("/map-layers/{map_layer_id}", responses=ERRORS)
-async def get_map_layer(map_layer_id: uuid.UUID, ctx: Ctx, session: Session) -> MapLayerResponse:
+async def get_map_layer(
+    map_layer_id: uuid.UUID,
+    ctx: Ctx,
+    session: Session,
+    property: Annotated[str | None, Query(max_length=100)] = None,  # noqa: A002
+    value: Annotated[str | None, Query(max_length=500)] = None,
+) -> MapLayerResponse:
+    if (property is None) != (value is None):
+        raise ApiError(400, "validation_failed", "`property` and `value` must be given together.")
     layer = (
         await session.execute(
             select(MapLayer).where(
@@ -146,17 +212,32 @@ async def get_map_layer(map_layer_id: uuid.UUID, ctx: Ctx, session: Session) -> 
             ).where(*scope)
         )
     ).one()
-    rows = (
-        await session.execute(
-            select(
-                SpatialFeature.id,
-                func.ST_AsGeoJSON(SpatialFeature.geom).label("geometry"),
-                SpatialFeature.properties,
-            )
-            .where(*scope)
-            .order_by(SpatialFeature.id)
+    features_query = (
+        select(
+            SpatialFeature.id,
+            func.ST_AsGeoJSON(SpatialFeature.geom).label("geometry"),
+            SpatialFeature.properties,
         )
-    ).all()
+        .where(*scope)
+        .order_by(SpatialFeature.id)
+    )
+    if property is not None and value is not None:
+        # Bound parameters on both sides: the key is data, never part of the SQL text.
+        features_query = features_query.where(SpatialFeature.properties[property].astext == value)
+    rows = (await session.execute(features_query)).all()
+    property_keys: list[str] = list(
+        (
+            await session.execute(
+                select(func.jsonb_object_keys(SpatialFeature.properties).label("key"))
+                .where(*scope)
+                .distinct()
+                .order_by("key")
+                .limit(MAX_PROPERTY_KEYS)
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     return MapLayerResponse.model_validate(
         {
@@ -167,6 +248,7 @@ async def get_map_layer(map_layer_id: uuid.UUID, ctx: Ctx, session: Session) -> 
                 "geometry_type": layer.geometry_type,
                 "feature_count": layer.feature_count,
                 "bbox": [float(v) for v in bbox] if bbox[0] is not None else None,
+                "property_keys": property_keys,
             },
             "features": {
                 "type": "FeatureCollection",

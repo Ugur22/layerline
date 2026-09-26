@@ -32,6 +32,7 @@ class ImportIssueOut(BaseModel):
 class ImportJobOut(BaseModel):
     id: uuid.UUID
     dataset_id: uuid.UUID
+    original_filename: str
     status: ImportStatus
     created_at: datetime
     finished_at: datetime | None
@@ -45,6 +46,11 @@ class ImportJobResponse(BaseModel):
     import_job: ImportJobOut
 
 
+class ImportJobListResponse(BaseModel):
+    import_jobs: list[ImportJobOut]
+    next_cursor: str | None
+
+
 class MapLayerOut(BaseModel):
     id: uuid.UUID
     dataset_id: uuid.UUID
@@ -52,6 +58,7 @@ class MapLayerOut(BaseModel):
     geometry_type: str
     feature_count: int
     bbox: list[float] | None
+    property_keys: list[str]
 
 
 class PointGeometry(BaseModel):
