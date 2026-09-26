@@ -1,4 +1,4 @@
-.PHONY: up down logs backend-check backend-fix
+.PHONY: up down logs backend-check backend-fix frontend-check frontend-fix check
 
 up:
 	docker compose up -d --build
@@ -15,3 +15,11 @@ backend-check:
 
 backend-fix:
 	cd backend && uv run ruff check --fix . && uv run ruff format .
+
+frontend-check:
+	cd frontend && npm run typecheck && npm run lint && npm run format:check && npm test
+
+frontend-fix:
+	cd frontend && npx eslint --fix . && npm run format
+
+check: backend-check frontend-check
