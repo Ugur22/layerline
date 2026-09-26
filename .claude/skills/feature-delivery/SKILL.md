@@ -13,7 +13,7 @@ Full rationale: `docs/agent-workflow.md`. Follow in order.
 4. **Test first where practical.** Write tests for the acceptance criteria; confirm they fail for the right reason.
 5. **Implement** the smallest change that passes. No unrelated refactors, renames, or dependency bumps.
 6. **Verify.** Run the checks from `docs/quality.md` that exist and apply. Exercise the feature itself for UI or flow changes. State any check that could not run.
-7. **Assess.** Run `quality-review` on the diff (fresh eyes, not self-approval).
+7. **Assess.** Run `quality-review` on the diff via the `reviewer` agent (fresh context, stronger model, not self-approval). Pass it the acceptance criteria and the diff command; it has no memory of this session. Use the `explorer` agent for broad read-only searches earlier in the loop.
 8. **Report.** Changes, evidence per acceptance criterion, checks run/not run, residual risks, docs updated.
 9. **Codify.** Only if the lesson is repeatable, put it in the right doc (see `docs/agent-workflow.md` §6). Otherwise add nothing.
 
