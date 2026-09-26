@@ -416,3 +416,42 @@ async def test_a_missing_raw_file_does_not_stop_the_clear(
     response = await client.delete(UPLOAD)
 
     assert response.json() == {"deleted": 1}
+
+
+def _feature_indexes(body: dict[str, Any], key: str = "i") -> list[int]:
+    return [int(f["properties"][key]) for f in body["features"]["features"]]
+
+
+async def test_layer_returns_geojson_features_in_file_order(client: httpx2.AsyncClient) -> None:
+    # Ids are random UUIDs, so returning by id would scramble 30 features with near certainty.
+    count = 30
+    layer_id = await imported_layer_id(
+        client, geojson(*([float(i), float(i)] for i in range(count)))
+    )
+
+    body = (await client.get(f"/api/v1/map-layers/{layer_id}")).json()
+
+    assert _feature_indexes(body) == list(range(count))
+
+
+async def test_layer_returns_csv_rows_top_to_bottom(client: httpx2.AsyncClient) -> None:
+    rows = "".join(f"{i},{50 + i * 0.01},4.9\n" for i in range(30))
+    job_id = await upload(client, f"n,lat,lon\n{rows}".encode(), "track.csv")
+    await process_queue()
+    layer_id = (await status(client, job_id))["map_layer_id"]
+
+    body = (await client.get(f"/api/v1/map-layers/{layer_id}")).json()
+
+    assert _feature_indexes(body, "n") == list(range(30))
+
+
+async def test_filtered_layer_keeps_file_order(client: httpx2.AsyncClient) -> None:
+    items = [
+        ([float(i), float(i)], {"i": i, "group": "even" if i % 2 == 0 else "odd"})
+        for i in range(30)
+    ]
+    layer_id = await imported_layer_id(client, geojson_with_properties(*items))
+
+    body = (await client.get(f"/api/v1/map-layers/{layer_id}?property=group&value=odd")).json()
+
+    assert _feature_indexes(body) == list(range(1, 30, 2))

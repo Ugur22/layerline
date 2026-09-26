@@ -99,3 +99,7 @@ class SpatialFeature(Base):
     import_job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("import_jobs.id"), index=True)
     geom: Mapped[Any] = mapped_column(Geometry(geometry_type="GEOMETRY", srid=4326))
     properties: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    # 0-based place in the uploaded file (GeoJSON `features` order, CSV data rows top to bottom).
+    # The default only covers rows stored before this column existed: every insert path must set it,
+    # or those features fall back to arbitrary order without any error.
+    position: Mapped[int] = mapped_column(Integer, server_default="0")

@@ -100,6 +100,7 @@ Notes:
 ```
 
 - Coordinates are `[longitude, latitude]` in WGS84 (Assumption).
+- `features.features` are in the order they appeared in the uploaded file: GeoJSON `features` array order, CSV data rows top to bottom. A filter keeps that relative order. Layers imported before this guarantee have no recorded order (all positions 0) and come back in an arbitrary but stable order (by id) for good; uploading the file again creates a new, ordered layer. No position field is exposed; the array order is the contract (Decided).
 - Optional exact-match filter: `?property=<key>&value=<text>`. Both or neither; one without the other is `400 validation_failed`. A feature matches when its property's text form equals `value` (`1` matches `"1"`, `true` matches `"true"`). Limits (provisional): `property` up to 100 characters, `value` up to 500; longer is `400 validation_failed`. Both are passed to the database as bound parameters, never concatenated into SQL. No match returns an empty `features` array, not an error.
 - `feature_count`, `bbox` and `property_keys` always describe the whole layer, so the view does not shift while filtering. The number of features returned is `features.features.length`.
 - `property_keys`: distinct property names across the layer's features that the filter can use (at most 100 characters), sorted, capped at 50.

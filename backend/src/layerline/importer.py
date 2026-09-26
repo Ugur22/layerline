@@ -89,8 +89,9 @@ async def run_import(
                         "import_job_id": job_id,
                         "geom": feature.ewkt,
                         "properties": feature.properties,
+                        "position": position,
                     }
-                    for feature in result.features
+                    for position, feature in enumerate(result.features)
                 ],
             )
             await session.execute(delete(MapLayer).where(MapLayer.import_job_id == job_id))

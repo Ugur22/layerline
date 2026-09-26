@@ -11,7 +11,7 @@ Shared terms for code, API, UI copy, and docs. Use these names exactly; do not i
 | **Dataset** | A named collection of source data within a project, fed by one or more uploads over time. |
 | **Import job** | One attempt to process one uploaded file into a dataset. Has a status and, on failure, errors. Immutable record once finished. |
 | **Map layer** | A renderable, read-oriented view of a dataset's spatial features (name, geometry type, style hints). |
-| **Spatial feature** | One geometry plus properties (e.g. a GeoJSON Feature or a CSV row with coordinates). The unit of storage and display. |
+| **Spatial feature** | One geometry plus properties (e.g. a GeoJSON Feature or a CSV row with coordinates). The unit of storage and display. It records its `position`: its 0-based place in the uploaded file. |
 | **Audit event** | An append-only record of who did what to which entity and when. |
 
 ## Relationships

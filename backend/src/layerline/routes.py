@@ -281,7 +281,8 @@ async def get_map_layer(
             SpatialFeature.properties,
         )
         .where(*scope)
-        .order_by(SpatialFeature.id)
+        # File order; the id only settles ties among features stored before positions existed.
+        .order_by(SpatialFeature.position, SpatialFeature.id)
     )
     if property_name is not None and value is not None:
         # Bound parameters on both sides: the key is data, never part of the SQL text.
