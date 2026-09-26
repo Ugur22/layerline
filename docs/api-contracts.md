@@ -1,0 +1,95 @@
+# API contracts (draft)
+
+Draft only; no implementation exists. Terms follow `domain.md`. Status: everything below is **Assumption** until implemented and mirrored by the OpenAPI schema. Contract changes go through the `api-contract-review` skill.
+
+## Conventions
+
+- Base path `/api/v1`; JSON bodies except file upload (`multipart/form-data`).
+- Field names `snake_case`; timestamps ISO 8601 UTC; ids are opaque strings.
+- Errors use one shape (below) with a stable machine-readable `code`; clients branch on `code`, never on `message`.
+- Every response for an entity includes its `id`; list endpoints are paginated when they can grow (Open: cursor vs. offset).
+- Authentication scheme: **Open** (see `architecture.md`). Every endpoint below assumes an authenticated caller scoped to one organisation, and returns `404` for entities outside it.
+- Breaking changes require a new version path or an ADR.
+
+### Error shape
+
+```json
+{ "error": { "code": "validation_failed", "message": "Human-readable summary", "details": [] } }
+```
+
+Initial codes: `validation_failed`, `not_found`, `unsupported_file_type`, `file_too_large`, `unauthorized`, `forbidden`.
+
+## 1. Upload a file to a dataset
+
+`POST /api/v1/datasets/{dataset_id}/imports` — `multipart/form-data`, field `file`.
+
+Success `202 Accepted`:
+
+```json
+{ "import_job": { "id": "…", "dataset_id": "…", "status": "queued", "created_at": "…" } }
+```
+
+Errors: `400 unsupported_file_type`, `413 file_too_large`, `404 not_found` (dataset), `401`/`403`.
+
+Notes:
+- Returns before processing; file content is not validated beyond type and size at this stage.
+- Accepted types in the first slice: GeoJSON (`.geojson`, `.json`). CSV later.
+- Size limit: **Open**.
+
+## 2. Get import status
+
+`GET /api/v1/imports/{import_job_id}`
+
+`200 OK`:
+
+```json
+{
+  "import_job": {
+    "id": "…",
+    "dataset_id": "…",
+    "status": "failed",
+    "created_at": "…",
+    "finished_at": "…",
+    "feature_count": null,
+    "map_layer_id": null,
+    "errors": [
+      { "code": "invalid_geometry", "message": "…", "location": { "feature_index": 12 } }
+    ]
+  }
+}
+```
+
+- `status`: `queued | processing | succeeded | failed`.
+- `feature_count` and `map_layer_id` are non-null only when `succeeded`; `errors` is non-empty only when `failed`.
+- `errors` may be truncated; if so, `errors_truncated: true` (Open: cap).
+- Errors: `404 not_found`.
+
+## 3. Get a map layer
+
+`GET /api/v1/map-layers/{map_layer_id}`
+
+`200 OK`:
+
+```json
+{
+  "map_layer": {
+    "id": "…",
+    "dataset_id": "…",
+    "name": "…",
+    "geometry_type": "Point",
+    "feature_count": 120,
+    "bbox": [4.85, 52.35, 4.95, 52.40]
+  },
+  "features": { "type": "FeatureCollection", "features": [] }
+}
+```
+
+- Coordinates are `[longitude, latitude]` in WGS84 (Assumption).
+- Returning all features inline is acceptable for the first slice only; the approach for large layers (bbox filter, tiles, pagination) is **Open** (`architecture.md` #3). Do not add filtering parameters until the slice works.
+- Errors: `404 not_found`.
+
+## Open questions
+
+- Should upload and layer retrieval be addressable by dataset instead of opaque job/layer ids?
+- Is a `GET /datasets/{id}/map-layers` list needed in the first slice?
+- Idempotency key on upload to avoid duplicate jobs on client retry?
