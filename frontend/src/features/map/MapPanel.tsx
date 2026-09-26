@@ -58,7 +58,7 @@ export function MapPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number })
               key={layer.data.map_layer.id}
               propertyKeys={layer.data.map_layer.property_keys}
             />
-            <div className="h-96 overflow-hidden rounded-lg border">
+            <div className="h-[min(70vh,48rem)] min-h-96 overflow-hidden rounded-lg border">
               <Suspense fallback={<p className="p-4 text-sm">Loading map…</p>}>
                 {/* A new layer must refit the view and reset readiness, so it remounts the map. */}
                 <LayerMap key={layer.data.map_layer.id} layer={layer.data} />

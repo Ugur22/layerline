@@ -1,0 +1,645 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.3651,
+     52.4494
+    ]
+   },
+   "properties": {
+    "name": "S-001",
+    "type": "buoy",
+    "depth_m": 8.6,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.3703,
+     52.4626
+    ]
+   },
+   "properties": {
+    "name": "S-002",
+    "type": "mooring",
+    "depth_m": 8.4,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.3341,
+     52.4899
+    ]
+   },
+   "properties": {
+    "name": "S-003",
+    "type": "sensor",
+    "depth_m": 8.1,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.257,
+     52.5406
+    ]
+   },
+   "properties": {
+    "name": "S-004",
+    "type": "drifter",
+    "depth_m": 9.3,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.2994,
+     52.5683
+    ]
+   },
+   "properties": {
+    "name": "S-005",
+    "type": "buoy",
+    "depth_m": 10.4,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.2461,
+     52.5844
+    ]
+   },
+   "properties": {
+    "name": "S-006",
+    "type": "mooring",
+    "depth_m": 14.7,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.1897,
+     52.6339
+    ]
+   },
+   "properties": {
+    "name": "S-007",
+    "type": "sensor",
+    "depth_m": 15.8,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.2025,
+     52.6302
+    ]
+   },
+   "properties": {
+    "name": "S-008",
+    "type": "drifter",
+    "depth_m": 14.0,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.0951,
+     52.6643
+    ]
+   },
+   "properties": {
+    "name": "S-009",
+    "type": "buoy",
+    "depth_m": 15.0,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.0681,
+     52.7328
+    ]
+   },
+   "properties": {
+    "name": "S-010",
+    "type": "mooring",
+    "depth_m": 17.1,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.0539,
+     52.7504
+    ]
+   },
+   "properties": {
+    "name": "S-011",
+    "type": "sensor",
+    "depth_m": 17.9,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.9893,
+     52.744
+    ]
+   },
+   "properties": {
+    "name": "S-012",
+    "type": "drifter",
+    "depth_m": 17.5,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.9928,
+     52.8093
+    ]
+   },
+   "properties": {
+    "name": "S-013",
+    "type": "buoy",
+    "depth_m": 18.9,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.962,
+     52.8318
+    ]
+   },
+   "properties": {
+    "name": "S-014",
+    "type": "mooring",
+    "depth_m": 19.9,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.9532,
+     52.8725
+    ]
+   },
+   "properties": {
+    "name": "S-015",
+    "type": "sensor",
+    "depth_m": 20.6,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.9025,
+     52.8875
+    ]
+   },
+   "properties": {
+    "name": "S-016",
+    "type": "drifter",
+    "depth_m": 24.1,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.8455,
+     52.925
+    ]
+   },
+   "properties": {
+    "name": "S-017",
+    "type": "buoy",
+    "depth_m": 25.5,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.8251,
+     52.9166
+    ]
+   },
+   "properties": {
+    "name": "S-018",
+    "type": "mooring",
+    "depth_m": 25.6,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.7989,
+     52.9468
+    ]
+   },
+   "properties": {
+    "name": "S-019",
+    "type": "sensor",
+    "depth_m": 23.7,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.7931,
+     53.006
+    ]
+   },
+   "properties": {
+    "name": "S-020",
+    "type": "drifter",
+    "depth_m": 26.8,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.7147,
+     53.0466
+    ]
+   },
+   "properties": {
+    "name": "S-021",
+    "type": "buoy",
+    "depth_m": 28.3,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.708,
+     53.058
+    ]
+   },
+   "properties": {
+    "name": "S-022",
+    "type": "mooring",
+    "depth_m": 28.3,
+    "campaign": "A"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.7111,
+     53.1009
+    ]
+   },
+   "properties": {
+    "name": "S-023",
+    "type": "sensor",
+    "depth_m": 29.3,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.5894,
+     53.1186
+    ]
+   },
+   "properties": {
+    "name": "S-024",
+    "type": "drifter",
+    "depth_m": 31.2,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.6493,
+     53.1458
+    ]
+   },
+   "properties": {
+    "name": "S-025",
+    "type": "buoy",
+    "depth_m": 32.7,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.5552,
+     53.1522
+    ]
+   },
+   "properties": {
+    "name": "S-026",
+    "type": "mooring",
+    "depth_m": 33.0,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.5295,
+     53.1647
+    ]
+   },
+   "properties": {
+    "name": "S-027",
+    "type": "sensor",
+    "depth_m": 32.0,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.4559,
+     53.1986
+    ]
+   },
+   "properties": {
+    "name": "S-028",
+    "type": "drifter",
+    "depth_m": 35.4,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.4414,
+     53.2275
+    ]
+   },
+   "properties": {
+    "name": "S-029",
+    "type": "buoy",
+    "depth_m": 34.8,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.3914,
+     53.3002
+    ]
+   },
+   "properties": {
+    "name": "S-030",
+    "type": "mooring",
+    "depth_m": 36.1,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.4383,
+     53.3091
+    ]
+   },
+   "properties": {
+    "name": "S-031",
+    "type": "sensor",
+    "depth_m": 38.5,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.3445,
+     53.3562
+    ]
+   },
+   "properties": {
+    "name": "S-032",
+    "type": "drifter",
+    "depth_m": 37.9,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.3718,
+     53.3541
+    ]
+   },
+   "properties": {
+    "name": "S-033",
+    "type": "buoy",
+    "depth_m": 41.0,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.2676,
+     53.3698
+    ]
+   },
+   "properties": {
+    "name": "S-034",
+    "type": "mooring",
+    "depth_m": 39.1,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.2652,
+     53.403
+    ]
+   },
+   "properties": {
+    "name": "S-035",
+    "type": "sensor",
+    "depth_m": 41.5,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.1837,
+     53.4329
+    ]
+   },
+   "properties": {
+    "name": "S-036",
+    "type": "drifter",
+    "depth_m": 41.8,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.2066,
+     53.4675
+    ]
+   },
+   "properties": {
+    "name": "S-037",
+    "type": "buoy",
+    "depth_m": 44.9,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.1682,
+     53.515
+    ]
+   },
+   "properties": {
+    "name": "S-038",
+    "type": "mooring",
+    "depth_m": 44.5,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.0887,
+     53.5424
+    ]
+   },
+   "properties": {
+    "name": "S-039",
+    "type": "sensor",
+    "depth_m": 46.6,
+    "campaign": "B"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     3.1375,
+     53.5768
+    ]
+   },
+   "properties": {
+    "name": "S-040",
+    "type": "drifter",
+    "depth_m": 47.2,
+    "campaign": "B"
+   }
+  }
+ ]
+}

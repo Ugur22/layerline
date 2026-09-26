@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ImportJob } from '@/api/types'
@@ -72,6 +72,50 @@ describe('UploadPanel', () => {
     )
 
     expect(screen.getByRole('button', { name: 'Upload' })).toBeEnabled()
+  })
+
+  it('shows the chosen file and lets the user remove it', async () => {
+    renderWithClient(<UploadPanel pollIntervalMs={POLL_MS} />)
+    const user = userEvent.setup()
+    await user.upload(
+      screen.getByLabelText(/survey data file/i),
+      new File(['x'.repeat(2048)], 'a.geojson'),
+    )
+
+    expect(screen.getByText('a.geojson')).toBeInTheDocument()
+    expect(screen.getByText('2.0 KB')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /remove/i }))
+
+    expect(screen.queryByText('a.geojson')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Upload' })).toBeDisabled()
+  })
+
+  it('selects a dropped file and highlights the zone while dragging over it', () => {
+    renderWithClient(<UploadPanel pollIntervalMs={POLL_MS} />)
+    const zone = screen.getByTestId('dropzone')
+    const file = new File(['{}'], 'dropped.csv')
+
+    fireEvent.dragEnter(zone, { dataTransfer: { files: [file] } })
+    expect(zone).toHaveAttribute('data-dragging', 'true')
+
+    fireEvent.drop(zone, { dataTransfer: { files: [file] } })
+
+    expect(zone).toHaveAttribute('data-dragging', 'false')
+    expect(screen.getByText('dropped.csv')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Upload' })).toBeEnabled()
+  })
+
+  it('rejects a dropped file with an unsupported extension without selecting it', () => {
+    renderWithClient(<UploadPanel pollIntervalMs={POLL_MS} />)
+
+    fireEvent.drop(screen.getByTestId('dropzone'), {
+      dataTransfer: { files: [new File(['x'], 'photo.png')] },
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/photo\.png.*GeoJSON or CSV/)
+    expect(screen.queryByText('photo.png', { selector: 'p' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Upload' })).toBeDisabled()
   })
 
   it('follows a job from queued to succeeded and stops polling', async () => {
