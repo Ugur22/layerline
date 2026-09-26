@@ -1,4 +1,4 @@
-import type { ApiErrorBody, ImportJob } from './types'
+import type { ApiErrorBody, ImportJob, MapLayerResponse } from './types'
 
 export class ApiError extends Error {
   readonly status: number
@@ -25,10 +25,14 @@ async function toApiError(response: Response): Promise<ApiError> {
   )
 }
 
-async function request(input: string, init?: RequestInit): Promise<ImportJob> {
+async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init)
   if (!response.ok) throw await toApiError(response)
-  return ((await response.json()) as { import_job: ImportJob }).import_job
+  return (await response.json()) as T
+}
+
+async function request(input: string, init?: RequestInit): Promise<ImportJob> {
+  return (await requestJson<{ import_job: ImportJob }>(input, init)).import_job
 }
 
 export function uploadImport(datasetId: string, file: File): Promise<ImportJob> {
@@ -39,4 +43,8 @@ export function uploadImport(datasetId: string, file: File): Promise<ImportJob> 
 
 export function getImport(importJobId: string): Promise<ImportJob> {
   return request(`/api/v1/imports/${importJobId}`)
+}
+
+export function getMapLayer(mapLayerId: string): Promise<MapLayerResponse> {
+  return requestJson<MapLayerResponse>(`/api/v1/map-layers/${mapLayerId}`)
 }
