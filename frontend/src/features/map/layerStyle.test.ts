@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import type { PointFeature } from '@/api/types'
 import {
+  activeHidden,
   buildColorScheme,
   buildSizeScale,
   colorExpression,
   MAX_CATEGORIES,
   MAX_RADIUS,
+  HIDDEN_OPACITY,
+  isHiddenPoint,
   MIN_RADIUS,
+  opacityExpression,
   radiusExpression,
+  visibleFilter,
 } from './layerStyle'
 
 function features(values: unknown[], key = 'p'): PointFeature[] {
@@ -157,5 +162,97 @@ describe('radiusExpression', () => {
     if (!scale) throw new Error('expected a scale')
 
     expect(JSON.stringify(radiusExpression(scale))).not.toContain('interpolate')
+  })
+})
+
+describe('category counts', () => {
+  it('counts the points in each category and the ones without a value', () => {
+    const scheme = buildColorScheme(features(['b', 'a', 'b', undefined, '']), 'p')
+
+    expect(scheme).toMatchObject({
+      kind: 'categorical',
+      entries: [
+        { value: 'b', count: 2 },
+        { value: 'a', count: 1 },
+      ],
+      missingCount: 2,
+    })
+  })
+})
+
+describe('opacityExpression', () => {
+  const scheme = buildColorScheme(features(['a', 'b', undefined]), 'p')
+  if (scheme?.kind !== 'categorical') throw new Error('expected a categorical scheme')
+
+  it('leaves every point fully opaque while nothing is hidden', () => {
+    expect(opacityExpression(scheme, [])).toBe(1)
+  })
+
+  it('dims the hidden values, matched on their text form', () => {
+    expect(opacityExpression(scheme, ['a'])).toEqual([
+      'case',
+      ['in', ['to-string', ['get', 'p']], ['literal', ['a']]],
+      HIDDEN_OPACITY,
+      1,
+    ])
+  })
+
+  it('hides points without a value through the empty string, as the colours do', () => {
+    expect(JSON.stringify(opacityExpression(scheme, ['']))).toContain('["literal",[""]]')
+  })
+})
+
+describe('isHiddenPoint', () => {
+  it('matches a point on the text form of its value', () => {
+    expect(isHiddenPoint({ p: 7 }, 'p', ['7'])).toBe(true)
+    expect(isHiddenPoint({ p: 'a' }, 'p', ['b'])).toBe(false)
+  })
+
+  it('treats an absent property as the empty value', () => {
+    expect(isHiddenPoint({}, 'p', [''])).toBe(true)
+  })
+
+  it('hides nothing when no property is coloured', () => {
+    expect(isHiddenPoint({ p: 'a' }, '', ['a'])).toBe(false)
+  })
+})
+
+describe('activeHidden', () => {
+  const scheme = buildColorScheme(features(['a', 'b', undefined]), 'p')
+  if (scheme?.kind !== 'categorical') throw new Error('expected a categorical scheme')
+
+  it('keeps hidden values the legend still has a row for', () => {
+    expect(activeHidden(scheme, ['a', ''])).toEqual(['a', ''])
+  })
+
+  it('drops values that are no longer in the data, so nothing stays dimmed without a row', () => {
+    expect(activeHidden(scheme, ['gone'])).toEqual([])
+  })
+
+  it('drops "No value" when no point is missing one', () => {
+    const complete = buildColorScheme(features(['a', 'b']), 'p')
+    if (complete?.kind !== 'categorical') throw new Error('expected a categorical scheme')
+
+    expect(activeHidden(complete, [''])).toEqual([])
+  })
+
+  it('hides nothing without a categorical scheme', () => {
+    expect(activeHidden(null, ['a'])).toEqual([])
+  })
+})
+
+describe('visibleFilter', () => {
+  const scheme = buildColorScheme(features(['a', 'b']), 'p')
+  if (scheme?.kind !== 'categorical') throw new Error('expected a categorical scheme')
+
+  it('does not filter while nothing is hidden', () => {
+    expect(visibleFilter(scheme, [])).toBeUndefined()
+  })
+
+  it('drops the hidden values', () => {
+    expect(visibleFilter(scheme, ['a'])).toEqual([
+      '!',
+      ['in', ['to-string', ['get', 'p']], ['literal', ['a']]],
+    ])
   })
 })

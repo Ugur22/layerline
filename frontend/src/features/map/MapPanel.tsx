@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useImportSession } from '@/features/imports/importSession'
 import { useImportJob } from '@/features/imports/useImportJob'
 import { FilterBar } from './FilterBar'
+import { PointInspector } from './PointInspector'
 import { useMapLayer } from './useMapLayer'
 
 // MapLibre is large and only needed after an import succeeds, so it stays out of the first load.
@@ -29,50 +30,53 @@ export function MapPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number })
     : 'Map'
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {layer.isPending && <p className="text-sm text-muted-foreground">Loading map layer…</p>}
-        {layer.isError && (
-          <Alert variant="destructive">
-            <AlertDescription className="flex flex-col items-start gap-2">
-              Could not load the map layer: {layer.error.message}
-              {/* Without data there is no filter bar, so a failing filter needs its own way out. */}
-              {filter && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setFilter(null)
-                  }}
-                >
-                  Clear filter
-                </Button>
-              )}
-            </AlertDescription>
-          </Alert>
-        )}
-        {layer.data && (
-          <>
-            <FilterBar
-              key={layer.data.map_layer.id}
-              propertyKeys={layer.data.map_layer.property_keys}
-            />
-            <div className="h-[min(70vh,48rem)] min-h-96 overflow-hidden rounded-lg border">
-              <Suspense fallback={<p className="p-4 text-sm">Loading map…</p>}>
-                {/* A new layer must refit the view and reset readiness, so it remounts the map. */}
-                <LayerMap
-                  key={layer.data.map_layer.id}
-                  layer={layer.data}
-                  styleFeatures={fullLayer.data?.features.features}
-                />
-              </Suspense>
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <Card>
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {layer.isPending && <p className="text-sm text-muted-foreground">Loading map layer…</p>}
+          {layer.isError && (
+            <Alert variant="destructive">
+              <AlertDescription className="flex flex-col items-start gap-2">
+                Could not load the map layer: {layer.error.message}
+                {/* Without data there is no filter bar, so a failing filter needs its own way out. */}
+                {filter && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setFilter(null)
+                    }}
+                  >
+                    Clear filter
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+          {layer.data && (
+            <>
+              <FilterBar
+                key={layer.data.map_layer.id}
+                propertyKeys={layer.data.map_layer.property_keys}
+              />
+              <div className="h-[min(70vh,48rem)] min-h-96 overflow-hidden rounded-lg border">
+                <Suspense fallback={<p className="p-4 text-sm">Loading map…</p>}>
+                  {/* A new layer must refit the view and reset readiness, so it remounts the map. */}
+                  <LayerMap
+                    key={layer.data.map_layer.id}
+                    layer={layer.data}
+                    styleFeatures={fullLayer.data?.features.features}
+                  />
+                </Suspense>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+      {layer.data && <PointInspector features={layer.data.features} />}
+    </div>
   )
 }

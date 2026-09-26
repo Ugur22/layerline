@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ImportJob, MapLayerResponse } from '@/api/types'
 import { useImportSession } from '@/features/imports/importSession'
+import { useMapInspection } from './mapInspection'
 import { renderWithClient } from '@/test/render'
 import { MapPanel } from './MapPanel'
 
@@ -35,6 +36,7 @@ vi.mock('react-map-gl/maplibre', async () => {
         'data-testid': props.id === 'layer-points' ? 'layer' : props.id,
         'data-color': JSON.stringify(props.paint['circle-color']),
         'data-radius': JSON.stringify(props.paint['circle-radius']),
+        'data-opacity': JSON.stringify(props.paint['circle-opacity']),
         'data-label': JSON.stringify(props.layout?.['text-field']),
       }),
     Popup: (props: { children: unknown }) =>
@@ -134,6 +136,7 @@ function mockApi(routes: Record<string, () => Response>) {
 describe('MapPanel', () => {
   beforeEach(() => {
     useImportSession.setState({ jobId: 'job-1', filter: null })
+    useMapInspection.getState().clear()
   })
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -316,11 +319,17 @@ describe('MapPanel', () => {
     await screen.findByText('good · 2 points')
 
     act(() => {
+      useMapInspection.getState().setPinned({
+        data: { type: 'FeatureCollection', features: [] },
+        coordinates: [4.9, 52.37],
+        properties: { name: 'from the first layer' },
+      })
       useImportSession.getState().setJobId('job-2')
     })
 
     expect(await screen.findByText('Loading map layer…')).toBeInTheDocument()
     expect(screen.queryByText('good · 2 points')).not.toBeInTheDocument()
+    expect(useMapInspection.getState().pinned).toBeNull()
     expect(screen.queryByTestId('map')).not.toBeInTheDocument()
 
     releaseSecond(
@@ -404,6 +413,51 @@ describe('MapPanel', () => {
 
       expect(screen.queryByRole('group', { name: /legend/i })).not.toBeInTheDocument()
       expect(screen.getByTestId('layer').getAttribute('data-color')).toBe('"#4f46e5"')
+    })
+
+    it('dims the points of a legend value when it is clicked, and restores them on a second click', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layerWithProperties(rows, ['type', 'depth_m'])),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      const colorBy = await screen.findByLabelText('Colour by')
+      await vi.waitFor(() => {
+        expect(colorBy).toBeEnabled()
+      })
+      await user.selectOptions(colorBy, 'type')
+      expect(screen.getByTestId('layer').getAttribute('data-opacity')).toBe('1')
+
+      await user.click(screen.getByRole('button', { name: /buoy/ }))
+
+      expect(screen.getByRole('button', { name: /buoy/ })).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.getByTestId('layer').getAttribute('data-opacity')).toContain('"buoy"')
+
+      await user.click(screen.getByRole('button', { name: /buoy/ }))
+
+      expect(screen.getByTestId('layer').getAttribute('data-opacity')).toBe('1')
+    })
+
+    it('shows every point again when another property is chosen', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layerWithProperties(rows, ['type', 'depth_m'])),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      const colorBy = await screen.findByLabelText('Colour by')
+      await vi.waitFor(() => {
+        expect(colorBy).toBeEnabled()
+      })
+      await user.selectOptions(colorBy, 'type')
+      await user.click(screen.getByRole('button', { name: /buoy/ }))
+
+      await user.selectOptions(colorBy, 'depth_m')
+      await user.selectOptions(colorBy, 'type')
+
+      expect(screen.getByRole('button', { name: /buoy/ })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByTestId('layer').getAttribute('data-opacity')).toBe('1')
     })
 
     it('keeps the legend of the whole layer while a filter shows only some points', async () => {

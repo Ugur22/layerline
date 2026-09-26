@@ -1,23 +1,33 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Map, { Layer, Popup, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import './maplibreWorker'
-import type { MapLayerResponse, PointFeature, PointFeatureCollection } from '@/api/types'
+import type { ExpressionSpecification } from 'maplibre-gl'
+import type { MapLayerResponse, PointFeature } from '@/api/types'
 import { BASEMAP_STYLE_URL } from '@/config'
 import { boundsFor } from './bounds'
 import { ColorLegend, SizeLegend } from './ColorLegend'
-import { FeaturePopupContent } from './FeaturePopupContent'
+import { FeatureTooltipContent } from './FeatureTooltipContent'
 import {
+  activeHidden,
   buildColorScheme,
   buildSizeScale,
   colorExpression,
   DEFAULT_COLOR,
   DEFAULT_RADIUS,
+  isHiddenPoint,
+  opacityExpression,
   radiusExpression,
+  visibleFilter,
 } from './layerStyle'
+import { useMapInspection, type InspectedPoint } from './mapInspection'
 
 const POINTS_LAYER_ID = 'layer-points'
 const LABELS_LAYER_ID = 'layer-labels'
+const HOVER_RING = 3
+const PINNED_RING = 5
+// Clears the largest point (see MAX_RADIUS) plus its ring, so the tooltip never covers the point.
+const HOVER_OFFSET = 22
 // Must exist in the basemap's glyph set (ADR 0009 allows any style); this is the default style's.
 // Collision handling hides overlapping labels, so no zoom threshold is needed.
 const LABEL_FONT = 'Noto Sans Regular'
@@ -62,11 +72,41 @@ function SelectControl({
 const NOTE_CLASS =
   'max-w-56 rounded-lg bg-background/95 px-2 py-1 text-xs shadow-sm ring-1 ring-border'
 
-interface Selection {
-  // Tied to the data it came from, so a popup for a point a new filter removed disappears.
-  data: PointFeatureCollection
-  coordinates: [number, number]
-  properties: Record<string, unknown>
+// A ring drawn around one point, sized from the point's own radius so it follows size-by-property.
+function PointRing({
+  id,
+  point,
+  radius,
+  grow,
+}: {
+  id: string
+  point: InspectedPoint
+  radius: ExpressionSpecification | number
+  grow: number
+}) {
+  // A new object each render would make the map re-send the data to its worker every time.
+  const data = useMemo<Omit<PointFeature, 'id'>>(
+    () => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: point.coordinates },
+      properties: point.properties,
+    }),
+    [point],
+  )
+  return (
+    <Source id={id} type="geojson" data={data}>
+      <Layer
+        id={`layer-${id}`}
+        type="circle"
+        paint={{
+          'circle-radius': ['+', radius, grow],
+          'circle-color': 'rgba(0, 0, 0, 0)',
+          'circle-stroke-color': '#111827',
+          'circle-stroke-width': 2.5,
+        }}
+      />
+    </Source>
+  )
 }
 
 interface LayerMapProps {
@@ -83,8 +123,13 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   const [colorKey, setColorKey] = useState('')
   const [sizeKey, setSizeKey] = useState('')
   const [labelKey, setLabelKey] = useState('')
-  const [selection, setSelection] = useState<Selection | null>(null)
-  const [hovering, setHovering] = useState(false)
+  const [hidden, setHidden] = useState<string[]>([])
+  const hover = useMapInspection((state) => state.hover)
+  const pinned = useMapInspection((state) => state.pinned)
+  const { setHover, setPinned, clear } = useMapInspection.getState()
+
+  // The map is remounted per layer; what was inspected on the old one must not linger in the panel.
+  useEffect(() => clear, [clear])
 
   const scheme = useMemo(
     () => (colorKey && styleFeatures ? buildColorScheme(styleFeatures, colorKey) : null),
@@ -102,25 +147,54 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
     [layer.map_layer.property_keys, styleFeatures],
   )
   const drawableScheme = scheme && scheme.kind !== 'too-many' ? scheme : null
-  const activeSelection = selection?.data === layer.features ? selection : null
+  const shownHidden = activeHidden(drawableScheme, hidden)
+  const opacity = drawableScheme ? opacityExpression(drawableScheme, shownHidden) : 1
+  const hiddenKey = drawableScheme?.kind === 'categorical' ? drawableScheme.key : ''
+  const activeHover = hover?.data === layer.features ? hover : null
+  const activePinned = pinned?.data === layer.features ? pinned : null
+  // Resting on the pinned point would stack two rings on it.
+  const hoverIsPinned =
+    activeHover !== null &&
+    activePinned?.coordinates[0] === activeHover.coordinates[0] &&
+    activePinned.coordinates[1] === activeHover.coordinates[1]
+  const pointRadius = sizeScale ? radiusExpression(sizeScale) : DEFAULT_RADIUS
 
-  function handleClick(event: MapLayerMouseEvent) {
+  function pointAt(event: MapLayerMouseEvent): InspectedPoint | null {
     // Typed by hand: the library's feature type depends on GeoJSON typings the linter cannot resolve.
-    const hit = event.features?.[0] as
-      | {
-          geometry: { type: string; coordinates: [number, number] }
-          properties: Record<string, unknown>
-        }
-      | undefined
-    if (hit?.geometry.type !== 'Point') {
-      setSelection(null)
-      return
-    }
-    setSelection({
+    const hits = (event.features ?? []) as {
+      geometry: { type: string; coordinates: [number, number] }
+      properties: Record<string, unknown>
+    }[]
+    // A dimmed point on top must not shadow a visible one underneath it.
+    const hit = hits.find(
+      (candidate) =>
+        candidate.geometry.type === 'Point' &&
+        !isHiddenPoint(candidate.properties, hiddenKey, shownHidden),
+    )
+    if (!hit) return null
+    return {
       data: layer.features,
       coordinates: hit.geometry.coordinates,
-      properties: hit.properties,
-    })
+      // Copied: the map hands back properties without a prototype, which cannot be sent to its worker.
+      properties: { ...hit.properties },
+    }
+  }
+
+  function toggleHidden(value: string) {
+    setHidden((current) =>
+      current.includes(value) ? current.filter((v) => v !== value) : [...current, value],
+    )
+    // A point that was just dimmed must not keep its ring, tooltip or place in the inspector.
+    setHover(null)
+    setPinned(null)
+  }
+
+  function handleClick(event: MapLayerMouseEvent) {
+    setPinned(pointAt(event))
+  }
+
+  function handleMouseMove(event: MapLayerMouseEvent) {
+    setHover(pointAt(event))
   }
 
   return (
@@ -134,7 +208,11 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
             value={colorKey}
             keys={propertyKeys}
             disabled={!styleFeatures}
-            onChange={setColorKey}
+            onChange={(value) => {
+              setColorKey(value)
+              // Hidden values belong to one property's legend and mean nothing under another.
+              setHidden([])
+            }}
           />
           {sizeKeys.length > 0 && (
             <SelectControl
@@ -170,12 +248,10 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
           mapStyle={BASEMAP_STYLE_URL}
           style={{ width: '100%', height: '100%' }}
           interactiveLayerIds={[POINTS_LAYER_ID]}
-          cursor={hovering ? 'pointer' : ''}
-          onMouseEnter={() => {
-            setHovering(true)
-          }}
+          cursor={activeHover ? 'pointer' : ''}
+          onMouseMove={handleMouseMove}
           onMouseLeave={() => {
-            setHovering(false)
+            setHover(null)
           }}
           onClick={handleClick}
           onIdle={() => {
@@ -187,16 +263,19 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
               id={POINTS_LAYER_ID}
               type="circle"
               paint={{
-                'circle-radius': sizeScale ? radiusExpression(sizeScale) : DEFAULT_RADIUS,
+                'circle-radius': pointRadius,
                 'circle-color': drawableScheme ? colorExpression(drawableScheme) : DEFAULT_COLOR,
                 'circle-stroke-color': '#ffffff',
                 'circle-stroke-width': 2,
+                'circle-opacity': opacity,
+                'circle-stroke-opacity': opacity,
               }}
             />
             {labelKey && (
               <Layer
                 id={LABELS_LAYER_ID}
                 type="symbol"
+                filter={visibleFilter(drawableScheme, shownHidden)}
                 layout={{
                   'text-field': ['to-string', ['get', labelKey]],
                   'text-font': [LABEL_FONT],
@@ -212,16 +291,23 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
               />
             )}
           </Source>
-          {activeSelection && (
+          {activePinned && (
+            <PointRing id="pinned" point={activePinned} radius={pointRadius} grow={PINNED_RING} />
+          )}
+          {activeHover && !hoverIsPinned && (
+            <PointRing id="hover" point={activeHover} radius={pointRadius} grow={HOVER_RING} />
+          )}
+          {activeHover && (
             <Popup
-              longitude={activeSelection.coordinates[0]}
-              latitude={activeSelection.coordinates[1]}
-              offset={12}
-              onClose={() => {
-                setSelection(null)
-              }}
+              className="layer-tooltip"
+              longitude={activeHover.coordinates[0]}
+              latitude={activeHover.coordinates[1]}
+              offset={HOVER_OFFSET}
+              closeButton={false}
+              closeOnClick={false}
+              focusAfterOpen={false}
             >
-              <FeaturePopupContent properties={activeSelection.properties} />
+              <FeatureTooltipContent properties={activeHover.properties} />
             </Popup>
           )}
         </Map>
@@ -235,7 +321,9 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
               {scheme.key} has {scheme.distinct} different values, too many to colour.
             </p>
           )}
-          {drawableScheme && <ColorLegend scheme={drawableScheme} />}
+          {drawableScheme && (
+            <ColorLegend scheme={drawableScheme} hidden={shownHidden} onToggle={toggleHidden} />
+          )}
           {sizeKey && !sizeScale && styleFeatures && (
             <p className={NOTE_CLASS}>No points have a number for {sizeKey}.</p>
           )}

@@ -6,6 +6,7 @@ export const MISSING_COLOR = '#9ca3af'
 export const DEFAULT_RADIUS = 7
 export const MIN_RADIUS = 5
 export const MAX_RADIUS = 14
+export const HIDDEN_OPACITY = 0.12
 
 // Okabe-Ito, minus black and yellow: distinguishable with common colour-vision deficiencies and
 // still visible against the basemap's water and land.
@@ -26,10 +27,17 @@ export const NUMERIC_RAMP = ['#fde725', '#21918c', '#440154'] as const
 export interface CategoryEntry {
   value: string
   color: string
+  count: number
 }
 
 export type ColorScheme =
-  | { kind: 'categorical'; key: string; entries: CategoryEntry[]; hasMissing: boolean }
+  | {
+      kind: 'categorical'
+      key: string
+      entries: CategoryEntry[]
+      hasMissing: boolean
+      missingCount: number
+    }
   | { kind: 'numeric'; key: string; min: number; max: number; hasMissing: boolean }
   // Colouring an identifier-like column (every point different) would only be noise.
   | { kind: 'too-many'; key: string; distinct: number }
@@ -103,8 +111,13 @@ export function buildColorScheme(features: PointFeature[], key: string): ColorSc
   return {
     kind: 'categorical',
     key,
-    entries: ordered.map(([value], index) => ({ value, color: CATEGORY_COLORS[index] as string })),
+    entries: ordered.map(([value, count], index) => ({
+      value,
+      color: CATEGORY_COLORS[index] as string,
+      count,
+    })),
     hasMissing,
+    missingCount: missing,
   }
 }
 
@@ -163,4 +176,48 @@ export function radiusExpression(scale: SizeScale): ExpressionSpecification {
           MAX_RADIUS,
         ]
   return ['case', isMissing, MIN_RADIUS, radius] as ExpressionSpecification
+}
+
+// Points without a value are hidden through the empty string, the same text the colours treat as missing.
+export function opacityExpression(
+  scheme: DrawableColorScheme,
+  hidden: readonly string[],
+): ExpressionSpecification | number {
+  if (scheme.kind !== 'categorical' || hidden.length === 0) return 1
+  return [
+    'case',
+    ['in', ['to-string', ['get', scheme.key]], ['literal', [...hidden]]],
+    HIDDEN_OPACITY,
+    1,
+  ] as ExpressionSpecification
+}
+
+// The map still reports dimmed points under the pointer, so interaction has to skip them itself.
+export function isHiddenPoint(
+  properties: Record<string, unknown>,
+  key: string,
+  hidden: readonly string[],
+): boolean {
+  return key !== '' && hidden.includes(propertyText(properties[key]))
+}
+
+// Only values the current legend can show again count as hidden: one that dropped out of the data
+// would otherwise keep dimming points with no row left to un-hide it.
+export function activeHidden(
+  scheme: DrawableColorScheme | null,
+  hidden: readonly string[],
+): string[] {
+  if (scheme?.kind !== 'categorical') return []
+  return hidden.filter((value) =>
+    value === '' ? scheme.hasMissing : scheme.entries.some((entry) => entry.value === value),
+  )
+}
+
+// Labels of dimmed points are dropped, not faded: a faded label still takes label space from visible ones.
+export function visibleFilter(
+  scheme: DrawableColorScheme | null,
+  hidden: readonly string[],
+): ExpressionSpecification | undefined {
+  if (scheme?.kind !== 'categorical' || hidden.length === 0) return undefined
+  return ['!', ['in', ['to-string', ['get', scheme.key]], ['literal', [...hidden]]]]
 }

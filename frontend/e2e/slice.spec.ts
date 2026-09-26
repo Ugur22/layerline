@@ -161,7 +161,9 @@ test('sizing points by a number draws without map errors and shows a size legend
   expect(problems).toEqual([])
 })
 
-test('clicking a point shows its properties', async ({ page }) => {
+test('clicking a point pins its properties in the inspector until the map is clicked elsewhere', async ({
+  page,
+}) => {
   const name = uniqueName('popup', 'csv')
   await page.locator('input[type=file]').setInputFiles({
     name,
@@ -177,8 +179,117 @@ test('clicking a point shows its properties', async ({ page }) => {
   if (!box) throw new Error('map canvas has no box')
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
 
-  await expect(page.locator('.maplibregl-popup')).toContainText('S-777')
-  await expect(page.locator('.maplibregl-popup')).toContainText('8.6')
+  const inspector = page.getByLabel('Point inspector')
+  await expect(inspector).toContainText('Pinned point')
+  await expect(inspector).toContainText('S-777')
+  await expect(inspector).toContainText('8.6')
+
+  await page.mouse.click(box.x + 8, box.y + box.height - 8)
+  await expect(inspector).not.toContainText('S-777')
+  await expect(inspector).toContainText('Hover a point')
+})
+
+test('hovering a point shows a short tooltip that goes away when the pointer leaves', async ({
+  page,
+}) => {
+  const problems = watchBrowserHealth(page)
+  const name = uniqueName('hover', 'csv')
+  await page.locator('input[type=file]').setInputFiles({
+    name,
+    mimeType: 'text/csv',
+    buffer: Buffer.from('name,lat,lon,depth_m\nS-778,52.4,4.5,8.6\n'),
+  })
+  await page.getByRole('button', { name: 'Upload' }).click()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+
+  const canvas = page.locator('canvas.maplibregl-canvas')
+  const box = await canvas.boundingBox()
+  if (!box) throw new Error('map canvas has no box')
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+
+  const tooltip = page.locator('.layer-tooltip')
+  await expect(tooltip).toContainText('S-778')
+  await expect(tooltip).toContainText('8.6')
+
+  await page.mouse.move(box.x + 8, box.y + box.height - 8)
+  await expect(tooltip).toHaveCount(0)
+  expect(problems).toEqual([])
+})
+
+test('hovering shows the point in the inspector and the tooltip alongside the pin', async ({
+  page,
+}) => {
+  const problems = watchBrowserHealth(page)
+  const name = uniqueName('pinned', 'csv')
+  await page.locator('input[type=file]').setInputFiles({
+    name,
+    mimeType: 'text/csv',
+    buffer: Buffer.from('name,lat,lon,depth_m\nS-779,52.4,4.5,8.6\n'),
+  })
+  await page.getByRole('button', { name: 'Upload' }).click()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+
+  const canvas = page.locator('canvas.maplibregl-canvas')
+  const box = await canvas.boundingBox()
+  if (!box) throw new Error('map canvas has no box')
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const inspector = page.getByLabel('Point inspector')
+
+  await page.mouse.move(centre.x, centre.y)
+  await expect(inspector).toContainText('Hovering')
+  await expect(inspector).toContainText('S-779')
+
+  await page.mouse.click(centre.x, centre.y)
+  await page.mouse.move(box.x + 8, box.y + box.height - 8)
+  await expect(inspector).toContainText('Pinned point')
+  await expect(page.locator('.layer-tooltip')).toHaveCount(0)
+
+  await page.mouse.move(centre.x, centre.y)
+  await expect(page.locator('.layer-tooltip')).toContainText('S-779')
+  expect(problems).toEqual([])
+})
+
+test('clicking a legend value hides those points from hover until clicked again', async ({
+  page,
+}) => {
+  const problems = watchBrowserHealth(page)
+  const name = uniqueName('legend', 'csv')
+  await page.locator('input[type=file]').setInputFiles({
+    name,
+    mimeType: 'text/csv',
+    buffer: Buffer.from('name,lat,lon,type\nS-780,52.4,4.5,buoy\n'),
+  })
+  await page.getByRole('button', { name: 'Upload' }).click()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+
+  await expect(page.getByLabel('Colour by')).toBeEnabled()
+  await page.getByLabel('Colour by').selectOption('type')
+  const canvas = page.locator('canvas.maplibregl-canvas')
+  const box = await canvas.boundingBox()
+  if (!box) throw new Error('map canvas has no box')
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const buoy = page.getByRole('group', { name: 'Legend for type' }).getByRole('button')
+  const inspector = page.getByRole('region', { name: 'Point inspector' })
+
+  await page.mouse.click(centre.x, centre.y)
+  await expect(inspector).toContainText('S-780')
+  await page.mouse.move(centre.x, centre.y)
+  await expect(page.locator('.layer-tooltip')).toContainText('S-780')
+
+  await buoy.click()
+  await expect(buoy).toHaveAttribute('aria-pressed', 'false')
+  await expect(inspector).toContainText('Hover a point')
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+  await page.mouse.move(centre.x + 20, centre.y + 20)
+  await page.mouse.move(centre.x, centre.y)
+  await expect(page.locator('.layer-tooltip')).toHaveCount(0)
+
+  await buoy.click()
+  await expect(buoy).toHaveAttribute('aria-pressed', 'true')
+  await page.mouse.move(centre.x + 20, centre.y + 20)
+  await page.mouse.move(centre.x, centre.y)
+  await expect(page.locator('.layer-tooltip')).toContainText('S-780')
+  expect(problems).toEqual([])
 })
 
 test('an invalid CSV reports spreadsheet row numbers', async ({ page }) => {

@@ -128,3 +128,8 @@
     @apply font-sans;
   }
 }
+
+/* The hover tooltip follows the pointer; if it took mouse events the map would lose the hover. */
+.layer-tooltip {
+  pointer-events: none;
+}

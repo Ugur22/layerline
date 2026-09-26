@@ -4,9 +4,9 @@ import { MapPanel } from '@/features/map/MapPanel'
 
 export default function App() {
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
+    <main className="mx-auto flex max-w-[90rem] flex-col gap-6 p-6">
       <h1 className="text-xl font-semibold">Layerline</h1>
-      <div className="grid items-start gap-6 lg:grid-cols-[24rem_1fr]">
+      <div className="grid items-start gap-6 lg:grid-cols-[17.5rem_minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           <UploadPanel />
           <ImportsList />
