@@ -1,6 +1,6 @@
 # Quality and verification model
 
-Backend checks exist and run with `make backend-check` (needs `make up` for the database). Frontend and end-to-end checks do not exist yet; until one does, a task report must say "not verifiable yet" rather than claim it passed. Tool names for those layers are assumptions.
+Backend and frontend checks exist and run with `make check` (backend tests need `make up` for the database). End-to-end checks do not exist yet; until one does, a task report must say "not verifiable yet" rather than claim it passed. Tool names for those layers are assumptions.
 
 ## Commands that exist
 
@@ -9,6 +9,9 @@ Backend checks exist and run with `make backend-check` (needs `make up` for the 
 | `make up` / `make down` | Compose stack: PostGIS, migrate step, API, worker |
 | `make backend-check` | `ruff check`, `ruff format --check`, `mypy` (strict), `pytest` |
 | `make backend-fix` | `ruff check --fix`, `ruff format` |
+| `make frontend-check` | `tsc -b` (strict), `eslint` (typescript-eslint strict-type-checked), `prettier --check`, `vitest run` |
+| `make frontend-fix` | `eslint --fix`, `prettier --write` |
+| `make check` | Both check suites |
 
 Backend tests run against a real PostGIS database (`layerline_test`, recreated each session) and the real Procrastinate worker; they never touch the development database.
 

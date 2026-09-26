@@ -1,6 +1,6 @@
 # 0001. Repo layout and tooling
 
-- Status: accepted
+- Status: accepted (package manager superseded by 0008)
 - Date: 2026-09-26
 
 ## Context

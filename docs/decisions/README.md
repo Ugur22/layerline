@@ -50,3 +50,4 @@ What becomes easier, harder, or required. Follow-ups.
 - [0005 Client state, data fetching, and pattern matching](0005-client-state-and-data-fetching.md) — accepted
 - [0006 Map stack](0006-map-stack.md) — accepted
 - [0007 Backend framework, database, and local development](0007-backend-database-and-local-dev.md) — accepted
+- [0008 npm as the frontend package manager](0008-npm-as-frontend-package-manager.md) — accepted

@@ -6,7 +6,7 @@ Nothing here is implemented yet. Status labels: **Decided** (accepted ADR) / **A
 
 | Area | Status | Choice |
 |---|---|---|
-| Repo layout and tooling | Decided ([0001](decisions/0001-repo-layout-and-tooling.md)) | One repo, independent `frontend/` and `backend/` packages; no monorepo tool. Frontend: Vite, React, strict TypeScript, pnpm, Vitest, ESLint + Prettier. Backend: Python 3.12+, uv, Ruff, mypy, pytest, Alembic |
+| Repo layout and tooling | Decided ([0001](decisions/0001-repo-layout-and-tooling.md)) | One repo, independent `frontend/` and `backend/` packages; no monorepo tool. Frontend: Vite, React, strict TypeScript, npm ([0008](decisions/0008-npm-as-frontend-package-manager.md)), Vitest, ESLint + Prettier. Backend: Python 3.12+, uv, Ruff, mypy, pytest, Alembic |
 | UI toolkit | Decided ([0004](decisions/0004-frontend-ui-toolkit.md)) | Tailwind CSS + shadcn/ui (Radix), TanStack Table for tables |
 | Client state and data | Decided ([0005](decisions/0005-client-state-and-data-fetching.md)) | TanStack Query (server state), Zustand (UI state), ts-pattern for exhaustive matching |
 | Map | Decided ([0006](decisions/0006-map-stack.md)) | MapLibre GL via `react-map-gl`; deck.gl deferred until measured need |
