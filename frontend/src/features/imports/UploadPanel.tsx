@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { uploadImport } from '@/api/imports'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -12,16 +12,18 @@ import { useImportJob } from './useImportJob'
 export function UploadPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number }) {
   const [file, setFile] = useState<File | null>(null)
   const { jobId, setJobId } = useImportSession()
+  const queryClient = useQueryClient()
   const job = useImportJob(jobId, pollIntervalMs)
   const upload = useMutation({
     mutationFn: (selected: File) => uploadImport(DEV_DATASET_ID, selected),
     onSuccess: (created) => {
       setJobId(created.id)
+      void queryClient.invalidateQueries({ queryKey: ['imports', DEV_DATASET_ID] })
     },
   })
 
   return (
-    <Card className="max-w-xl">
+    <Card>
       <CardHeader>
         <CardTitle>Upload survey data</CardTitle>
       </CardHeader>

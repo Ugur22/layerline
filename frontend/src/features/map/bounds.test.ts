@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { boundsFor } from './bounds'
 
-const layer = { id: 'l', dataset_id: 'd', name: 'n', geometry_type: 'Point', feature_count: 2 }
+const layer = {
+  id: 'l',
+  dataset_id: 'd',
+  name: 'n',
+  geometry_type: 'Point',
+  feature_count: 2,
+  property_keys: [],
+}
 
 describe('boundsFor', () => {
   it('converts [w, s, e, n] into MapLibre corner pairs', () => {

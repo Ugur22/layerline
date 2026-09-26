@@ -1,0 +1,6 @@
+{"type":"FeatureCollection","features":[
+ {"type":"Feature","geometry":{"type":"Point","coordinates":[4.8952,52.3702]},"properties":{"name":"Station 1","type":"buoy","depth_m":12}},
+ {"type":"Feature","geometry":{"type":"Point","coordinates":[4.9041,52.3676]},"properties":{"name":"Station 2","type":"buoy","depth_m":8}},
+ {"type":"Feature","geometry":{"type":"Point","coordinates":[4.9182,52.3731]},"properties":{"name":"Station 3","type":"mooring","depth_m":12}},
+ {"type":"Feature","geometry":{"type":"Point","coordinates":[4.8837,52.3599]},"properties":{"name":"Station 4","type":"mooring","depth_m":20}},
+ {"type":"Feature","geometry":{"type":"Point","coordinates":[4.9290,52.3555]},"properties":{"name":"Station 5","type":"sensor","depth_m":5}}]}

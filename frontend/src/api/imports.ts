@@ -1,4 +1,4 @@
-import type { ApiErrorBody, ImportJob, MapLayerResponse } from './types'
+import type { ApiErrorBody, ImportJob, ImportJobList, LayerFilter, MapLayerResponse } from './types'
 
 export class ApiError extends Error {
   readonly status: number
@@ -45,6 +45,20 @@ export function getImport(importJobId: string): Promise<ImportJob> {
   return request(`/api/v1/imports/${importJobId}`)
 }
 
-export function getMapLayer(mapLayerId: string): Promise<MapLayerResponse> {
-  return requestJson<MapLayerResponse>(`/api/v1/map-layers/${mapLayerId}`)
+export function listImports(datasetId: string, cursor?: string | null): Promise<ImportJobList> {
+  const params = new URLSearchParams()
+  if (cursor) params.set('cursor', cursor)
+  const query = params.size ? `?${params.toString()}` : ''
+  return requestJson<ImportJobList>(`/api/v1/datasets/${datasetId}/imports${query}`)
+}
+
+export function getMapLayer(
+  mapLayerId: string,
+  filter?: LayerFilter | null,
+): Promise<MapLayerResponse> {
+  // URLSearchParams encodes the user's text, so odd characters cannot alter the request.
+  const query = filter
+    ? `?${new URLSearchParams({ property: filter.property, value: filter.value }).toString()}`
+    : ''
+  return requestJson<MapLayerResponse>(`/api/v1/map-layers/${mapLayerId}${query}`)
 }

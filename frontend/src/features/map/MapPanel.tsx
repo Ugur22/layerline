@@ -3,29 +3,34 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useImportSession } from '@/features/imports/importSession'
 import { useImportJob } from '@/features/imports/useImportJob'
+import { FilterBar } from './FilterBar'
 import { useMapLayer } from './useMapLayer'
 
 // MapLibre is large and only needed after an import succeeds, so it stays out of the first load.
 const LayerMap = lazy(() => import('./LayerMap').then((m) => ({ default: m.LayerMap })))
 
 export function MapPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number }) {
-  const jobId = useImportSession((state) => state.jobId)
+  const { jobId, filter } = useImportSession()
   const layerId = useImportJob(jobId, pollIntervalMs).data?.map_layer_id
-  const layer = useMapLayer(layerId)
+  const layer = useMapLayer(layerId, filter)
 
   // The map only exists once an import has produced a layer.
   if (!layerId) return null
 
+  const total = layer.data?.map_layer.feature_count
+  const shown = layer.data?.features.features.length
+  const title = layer.data
+    ? filter
+      ? `${layer.data.map_layer.name} · showing ${String(shown)} of ${String(total)} points`
+      : `${layer.data.map_layer.name} · ${String(total)} points`
+    : 'Map'
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>
-          {layer.data
-            ? `${layer.data.map_layer.name} · ${String(layer.data.map_layer.feature_count)} points`
-            : 'Map'}
-        </CardTitle>
+        <CardTitle>{title}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-4">
         {layer.isPending && <p className="text-sm text-muted-foreground">Loading map layer…</p>}
         {layer.isError && (
           <Alert variant="destructive">
@@ -33,11 +38,17 @@ export function MapPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number })
           </Alert>
         )}
         {layer.data && (
-          <div className="h-96 overflow-hidden rounded-lg border">
-            <Suspense fallback={<p className="p-4 text-sm">Loading map…</p>}>
-              <LayerMap layer={layer.data} />
-            </Suspense>
-          </div>
+          <>
+            <FilterBar
+              key={layer.data.map_layer.id}
+              propertyKeys={layer.data.map_layer.property_keys}
+            />
+            <div className="h-96 overflow-hidden rounded-lg border">
+              <Suspense fallback={<p className="p-4 text-sm">Loading map…</p>}>
+                <LayerMap layer={layer.data} />
+              </Suspense>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>

@@ -1,12 +1,18 @@
+import { ImportsList } from '@/features/imports/ImportsList'
 import { UploadPanel } from '@/features/imports/UploadPanel'
 import { MapPanel } from '@/features/map/MapPanel'
 
 export default function App() {
   return (
-    <main className="mx-auto flex max-w-4xl flex-col gap-6 p-6">
+    <main className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
       <h1 className="text-xl font-semibold">Layerline</h1>
-      <UploadPanel />
-      <MapPanel />
+      <div className="grid items-start gap-6 lg:grid-cols-[24rem_1fr]">
+        <div className="flex flex-col gap-6">
+          <UploadPanel />
+          <ImportsList />
+        </div>
+        <MapPanel />
+      </div>
     </main>
   )
 }

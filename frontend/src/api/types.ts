@@ -11,6 +11,7 @@ export interface ImportIssue {
 export interface ImportJob {
   id: string
   dataset_id: string
+  original_filename: string
   status: ImportStatus
   created_at: string
   finished_at: string | null
@@ -18,6 +19,17 @@ export interface ImportJob {
   map_layer_id: string | null
   errors: ImportIssue[]
   errors_truncated: boolean
+}
+
+export interface ImportJobList {
+  import_jobs: ImportJob[]
+  // Null on the last page. Opaque: never build or parse it.
+  next_cursor: string | null
+}
+
+export interface LayerFilter {
+  property: string
+  value: string
 }
 
 export interface ApiErrorBody {
@@ -45,6 +57,7 @@ export interface MapLayerResponse {
     feature_count: number
     // [west, south, east, north]; null when the layer has no features.
     bbox: [number, number, number, number] | null
+    property_keys: string[]
   }
   features: PointFeatureCollection
 }

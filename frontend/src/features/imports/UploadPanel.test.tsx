@@ -12,6 +12,7 @@ function job(overrides: Partial<ImportJob>): ImportJob {
   return {
     id: 'job-1',
     dataset_id: 'dataset-1',
+    original_filename: 'good.geojson',
     status: 'queued',
     created_at: '2026-01-01T00:00:00Z',
     finished_at: null,
