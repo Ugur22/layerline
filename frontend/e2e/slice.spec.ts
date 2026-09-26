@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
+import { FIT_PADDING } from '../src/features/map/fitPadding.js'
+
+// A lone point is fitted to the middle of the padded view, so it sits off the canvas middle by half
+// the difference between the top and bottom padding.
+const POINT_SHIFT = (FIT_PADDING.top - FIT_PADDING.bottom) / 2
 
 const SAMPLES = path.resolve(import.meta.dirname, '../../samples')
 
@@ -133,7 +138,10 @@ test('colouring by a property shows a legend and keeps it while filtering', asyn
   await expect(page.getByText(`${stem} · 5 points`)).toBeVisible()
   await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
 
-  await page.getByLabel('Colour by').selectOption('type')
+  await page
+    .getByRole('radiogroup', { name: 'Colour by' })
+    .getByText('type', { exact: true })
+    .click()
   await expect(page.getByRole('group', { name: 'Legend for type' })).toContainText('buoy')
 
   await page.getByLabel('Property').selectOption('type')
@@ -154,7 +162,10 @@ test('sizing points by a number draws without map errors and shows a size legend
 
   await page.getByLabel('Size by').selectOption('depth_m')
   await expect(page.getByRole('group', { name: 'Size legend for depth_m' })).toBeVisible()
-  await page.getByLabel('Colour by').selectOption('type')
+  await page
+    .getByRole('radiogroup', { name: 'Colour by' })
+    .getByText('type', { exact: true })
+    .click()
   await expect(page.getByRole('group', { name: 'Legend for type' })).toBeVisible()
   // Ready again means the map redrew with the data-driven radius and colour and went idle.
   await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
@@ -177,7 +188,7 @@ test('clicking a point pins its properties in the inspector until the map is cli
   const canvas = page.locator('canvas.maplibregl-canvas')
   const box = await canvas.boundingBox()
   if (!box) throw new Error('map canvas has no box')
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2 + POINT_SHIFT)
 
   const inspector = page.getByLabel('Point inspector')
   await expect(inspector).toContainText('Pinned point')
@@ -205,7 +216,7 @@ test('hovering a point shows a short tooltip that goes away when the pointer lea
   const canvas = page.locator('canvas.maplibregl-canvas')
   const box = await canvas.boundingBox()
   if (!box) throw new Error('map canvas has no box')
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + POINT_SHIFT)
 
   const tooltip = page.locator('.layer-tooltip')
   await expect(tooltip).toContainText('S-778')
@@ -232,7 +243,7 @@ test('hovering shows the point in the inspector and the tooltip alongside the pi
   const canvas = page.locator('canvas.maplibregl-canvas')
   const box = await canvas.boundingBox()
   if (!box) throw new Error('map canvas has no box')
-  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 + POINT_SHIFT }
   const inspector = page.getByLabel('Point inspector')
 
   await page.mouse.move(centre.x, centre.y)
@@ -262,12 +273,17 @@ test('clicking a legend value hides those points from hover until clicked again'
   await page.getByRole('button', { name: 'Upload' }).click()
   await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
 
-  await expect(page.getByLabel('Colour by')).toBeEnabled()
-  await page.getByLabel('Colour by').selectOption('type')
+  await expect(
+    page.getByRole('radiogroup', { name: 'Colour by' }).getByRole('radio', { name: 'None' }),
+  ).toBeEnabled()
+  await page
+    .getByRole('radiogroup', { name: 'Colour by' })
+    .getByText('type', { exact: true })
+    .click()
   const canvas = page.locator('canvas.maplibregl-canvas')
   const box = await canvas.boundingBox()
   if (!box) throw new Error('map canvas has no box')
-  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 + POINT_SHIFT }
   const buoy = page.getByRole('group', { name: 'Legend for type' }).getByRole('button')
   const inspector = page.getByRole('region', { name: 'Point inspector' })
 

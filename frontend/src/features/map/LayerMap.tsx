@@ -6,8 +6,10 @@ import type { ExpressionSpecification } from 'maplibre-gl'
 import type { MapLayerResponse, PointFeature } from '@/api/types'
 import { BASEMAP_STYLE_URL } from '@/config'
 import { boundsFor } from './bounds'
+import { FIT_PADDING } from './fitPadding'
 import { ColorLegend, SizeLegend } from './ColorLegend'
 import { FeatureTooltipContent } from './FeatureTooltipContent'
+import { MAX_SEGMENTED_KEYS, SegmentedControl, SelectControl } from './LayerControls'
 import {
   activeHidden,
   buildColorScheme,
@@ -31,43 +33,6 @@ const HOVER_OFFSET = 22
 // Must exist in the basemap's glyph set (ADR 0009 allows any style); this is the default style's.
 // Collision handling hides overlapping labels, so no zoom threshold is needed.
 const LABEL_FONT = 'Noto Sans Regular'
-
-const CONTROL_CLASS = 'h-7 rounded-md border bg-background px-1 text-xs'
-
-function SelectControl({
-  label,
-  value,
-  keys,
-  disabled,
-  onChange,
-}: {
-  label: string
-  value: string
-  keys: string[]
-  disabled: boolean
-  onChange: (value: string) => void
-}) {
-  return (
-    <label className="flex items-center gap-2 text-xs">
-      {label}
-      <select
-        className={CONTROL_CLASS}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => {
-          onChange(event.target.value)
-        }}
-      >
-        <option value="">None</option>
-        {keys.map((key) => (
-          <option key={key} value={key}>
-            {key}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
-}
 
 const NOTE_CLASS =
   'max-w-56 rounded-lg bg-background/95 px-2 py-1 text-xs shadow-sm ring-1 ring-border'
@@ -146,6 +111,17 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
         : [],
     [layer.map_layer.property_keys, styleFeatures],
   )
+  const colourProps = {
+    label: 'Colour by',
+    value: colorKey,
+    keys: propertyKeys,
+    disabled: !styleFeatures,
+    onChange: (value: string) => {
+      setColorKey(value)
+      // Hidden values belong to one property's legend and mean nothing under another.
+      setHidden([])
+    },
+  }
   const drawableScheme = scheme && scheme.kind !== 'too-many' ? scheme : null
   const shownHidden = activeHidden(drawableScheme, hidden)
   const opacity = drawableScheme ? opacityExpression(drawableScheme, shownHidden) : 1
@@ -201,37 +177,6 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
     // `idle` fires only once every source is loaded and rendered, which needs the map's worker. The
     // attribute lets end-to-end tests wait for a map that really works, not just one that mounted.
     <div className="flex h-full w-full flex-col" data-map-ready={ready}>
-      {propertyKeys.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b bg-background px-2 py-1.5">
-          <SelectControl
-            label="Colour by"
-            value={colorKey}
-            keys={propertyKeys}
-            disabled={!styleFeatures}
-            onChange={(value) => {
-              setColorKey(value)
-              // Hidden values belong to one property's legend and mean nothing under another.
-              setHidden([])
-            }}
-          />
-          {sizeKeys.length > 0 && (
-            <SelectControl
-              label="Size by"
-              value={sizeKey}
-              keys={sizeKeys}
-              disabled={!styleFeatures}
-              onChange={setSizeKey}
-            />
-          )}
-          <SelectControl
-            label="Label by"
-            value={labelKey}
-            keys={propertyKeys}
-            disabled={false}
-            onChange={setLabelKey}
-          />
-        </div>
-      )}
       <div className="relative min-h-0 flex-1">
         <Map
           initialViewState={
@@ -239,7 +184,7 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
               ? {
                   bounds,
                   fitBoundsOptions: {
-                    padding: 48,
+                    padding: FIT_PADDING,
                     maxZoom: 15,
                   },
                 }
@@ -311,6 +256,32 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
             </Popup>
           )}
         </Map>
+
+        {propertyKeys.length > 0 && (
+          <div className="absolute top-2 left-2 z-10 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg bg-background/95 px-2 py-1.5 shadow-sm ring-1 ring-border">
+            {propertyKeys.length <= MAX_SEGMENTED_KEYS ? (
+              <SegmentedControl {...colourProps} />
+            ) : (
+              <SelectControl {...colourProps} />
+            )}
+            {sizeKeys.length > 0 && (
+              <SelectControl
+                label="Size by"
+                value={sizeKey}
+                keys={sizeKeys}
+                disabled={!styleFeatures}
+                onChange={setSizeKey}
+              />
+            )}
+            <SelectControl
+              label="Label by"
+              value={labelKey}
+              keys={propertyKeys}
+              disabled={false}
+              onChange={setLabelKey}
+            />
+          </div>
+        )}
 
         <div className="pointer-events-none absolute bottom-6 left-2 flex flex-col items-start gap-2">
           {colorKey && !scheme && styleFeatures && (

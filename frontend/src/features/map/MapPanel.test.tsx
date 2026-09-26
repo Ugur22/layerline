@@ -179,11 +179,14 @@ describe('MapPanel', () => {
     expect(await screen.findByTestId('source')).toHaveAttribute('data-count', '2')
     const view = JSON.parse(screen.getByTestId('map').getAttribute('data-view') ?? '{}') as {
       bounds: unknown
+      fitBoundsOptions: { padding: { top: number; left: number } }
     }
     expect(view.bounds).toEqual([
       [4.9, 52.37],
       [4.95, 52.4],
     ])
+    // The control bar floats over the top of the map, so the points must be fitted below it.
+    expect(view.fitBoundsOptions.padding.top).toBeGreaterThan(view.fitBoundsOptions.padding.left)
     expect(screen.getByTestId('map').getAttribute('data-style')).toMatch(/^https:\/\//)
   })
 
@@ -388,14 +391,14 @@ describe('MapPanel', () => {
       })
       const user = userEvent.setup()
       renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
-      const colorBy = await screen.findByLabelText('Colour by')
+      const colorBy = await screen.findByRole('radiogroup', { name: 'Colour by' })
       await vi.waitFor(() => {
-        expect(colorBy).toBeEnabled()
+        expect(within(colorBy).getByRole('radio', { name: 'None' })).toBeEnabled()
       })
       expect(screen.getByTestId('layer').getAttribute('data-color')).toBe('"#4f46e5"')
       expect(screen.queryByRole('group', { name: /legend/i })).not.toBeInTheDocument()
 
-      await user.selectOptions(colorBy, 'depth_m')
+      await user.click(within(colorBy).getByRole('radio', { name: 'depth_m' }))
 
       const legend = screen.getByRole('group', { name: 'Legend for depth_m' })
       expect(legend).toHaveTextContent('8.6')
@@ -403,13 +406,13 @@ describe('MapPanel', () => {
       expect(legend).toHaveTextContent('No value')
       expect(screen.getByTestId('layer').getAttribute('data-color')).toContain('interpolate')
 
-      await user.selectOptions(colorBy, 'type')
+      await user.click(within(colorBy).getByRole('radio', { name: 'type' }))
 
       const categories = screen.getByRole('group', { name: 'Legend for type' })
       expect(categories).toHaveTextContent('buoy')
       expect(categories).toHaveTextContent('mooring')
 
-      await user.selectOptions(colorBy, '')
+      await user.click(within(colorBy).getByRole('radio', { name: 'None' }))
 
       expect(screen.queryByRole('group', { name: /legend/i })).not.toBeInTheDocument()
       expect(screen.getByTestId('layer').getAttribute('data-color')).toBe('"#4f46e5"')
@@ -422,11 +425,11 @@ describe('MapPanel', () => {
       })
       const user = userEvent.setup()
       renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
-      const colorBy = await screen.findByLabelText('Colour by')
+      const colorBy = await screen.findByRole('radiogroup', { name: 'Colour by' })
       await vi.waitFor(() => {
-        expect(colorBy).toBeEnabled()
+        expect(within(colorBy).getByRole('radio', { name: 'None' })).toBeEnabled()
       })
-      await user.selectOptions(colorBy, 'type')
+      await user.click(within(colorBy).getByRole('radio', { name: 'type' }))
       expect(screen.getByTestId('layer').getAttribute('data-opacity')).toBe('1')
 
       await user.click(screen.getByRole('button', { name: /buoy/ }))
@@ -446,15 +449,15 @@ describe('MapPanel', () => {
       })
       const user = userEvent.setup()
       renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
-      const colorBy = await screen.findByLabelText('Colour by')
+      const colorBy = await screen.findByRole('radiogroup', { name: 'Colour by' })
       await vi.waitFor(() => {
-        expect(colorBy).toBeEnabled()
+        expect(within(colorBy).getByRole('radio', { name: 'None' })).toBeEnabled()
       })
-      await user.selectOptions(colorBy, 'type')
+      await user.click(within(colorBy).getByRole('radio', { name: 'type' }))
       await user.click(screen.getByRole('button', { name: /buoy/ }))
 
-      await user.selectOptions(colorBy, 'depth_m')
-      await user.selectOptions(colorBy, 'type')
+      await user.click(within(colorBy).getByRole('radio', { name: 'depth_m' }))
+      await user.click(within(colorBy).getByRole('radio', { name: 'type' }))
 
       expect(screen.getByRole('button', { name: /buoy/ })).toHaveAttribute('aria-pressed', 'true')
       expect(screen.getByTestId('layer').getAttribute('data-opacity')).toBe('1')
@@ -476,12 +479,12 @@ describe('MapPanel', () => {
       const user = userEvent.setup()
       renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
       await screen.findByText('good · showing 1 of 3 points')
-      const colorBy = screen.getByLabelText('Colour by')
+      const colorBy = screen.getByRole('radiogroup', { name: 'Colour by' })
       await vi.waitFor(() => {
-        expect(colorBy).toBeEnabled()
+        expect(within(colorBy).getByRole('radio', { name: 'None' })).toBeEnabled()
       })
 
-      await user.selectOptions(colorBy, 'type')
+      await user.click(within(colorBy).getByRole('radio', { name: 'type' }))
 
       expect(screen.getByTestId('source')).toHaveAttribute('data-count', '1')
       expect(screen.getByRole('group', { name: 'Legend for type' })).toHaveTextContent('mooring')
@@ -494,12 +497,12 @@ describe('MapPanel', () => {
       })
       const user = userEvent.setup()
       renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
-      const colorBy = await screen.findByLabelText('Colour by')
+      const colorBy = await screen.findByRole('radiogroup', { name: 'Colour by' })
       await vi.waitFor(() => {
-        expect(colorBy).toBeEnabled()
+        expect(within(colorBy).getByRole('radio', { name: 'None' })).toBeEnabled()
       })
 
-      await user.selectOptions(colorBy, 'b')
+      await user.click(within(colorBy).getByRole('radio', { name: 'b' }))
 
       expect(screen.getByText('No points have a value for b.')).toBeInTheDocument()
     })
@@ -512,12 +515,12 @@ describe('MapPanel', () => {
       })
       const user = userEvent.setup()
       renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
-      const colorBy = await screen.findByLabelText('Colour by')
+      const colorBy = await screen.findByRole('radiogroup', { name: 'Colour by' })
       await vi.waitFor(() => {
-        expect(colorBy).toBeEnabled()
+        expect(within(colorBy).getByRole('radio', { name: 'None' })).toBeEnabled()
       })
 
-      await user.selectOptions(colorBy, 'name')
+      await user.click(within(colorBy).getByRole('radio', { name: 'name' }))
 
       expect(screen.getByText(/8 different values, too many to colour/)).toBeInTheDocument()
       expect(screen.queryByRole('group', { name: /legend/i })).not.toBeInTheDocument()
@@ -569,12 +572,43 @@ describe('MapPanel', () => {
         '/api/v1/map-layers/layer-1': () => json(layerWithProperties([{ type: 'buoy' }], ['type'])),
       })
       renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
-      await screen.findByLabelText('Colour by')
+      await screen.findByRole('radiogroup', { name: 'Colour by' })
       await vi.waitFor(() => {
-        expect(screen.getByLabelText('Colour by')).toBeEnabled()
+        expect(screen.getByRole('radio', { name: 'None' })).toBeEnabled()
       })
 
       expect(screen.queryByLabelText('Size by')).not.toBeInTheDocument()
+    })
+
+    it('still uses buttons at exactly the largest number of properties that fit', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () =>
+          json(layerWithProperties([{ a: '1' }], ['a', 'b', 'c', 'd', 'e'])),
+      })
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+
+      expect(await screen.findByRole('radiogroup', { name: 'Colour by' })).toBeInTheDocument()
+    })
+
+    it('switches the colour control to a menu when there are too many properties for buttons', async () => {
+      const keys = ['a', 'b', 'c', 'd', 'e', 'f']
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layerWithProperties([{ a: '1', b: 'x' }], keys)),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      const colorBy = await screen.findByLabelText('Colour by')
+      await vi.waitFor(() => {
+        expect(colorBy).toBeEnabled()
+      })
+
+      expect(screen.queryByRole('radiogroup', { name: 'Colour by' })).not.toBeInTheDocument()
+
+      await user.selectOptions(colorBy, 'b')
+
+      expect(screen.getByRole('group', { name: 'Legend for b' })).toBeInTheDocument()
     })
 
     it('adds a label layer for the chosen property and removes it again', async () => {
