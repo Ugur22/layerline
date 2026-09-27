@@ -471,7 +471,7 @@ describe('MapPanel', () => {
       await user.click(screen.getByRole('button', { name: 'Track' }))
 
       await user.selectOptions(screen.getByLabelText('Property'), 'kind')
-      await user.type(screen.getByLabelText('Equals'), 'x')
+      await user.type(screen.getByLabelText('Value'), 'x')
       await user.click(screen.getByRole('button', { name: 'Apply filter' }))
       await screen.findByText('good · showing 3 of 6 points')
 
@@ -555,7 +555,7 @@ describe('MapPanel', () => {
     renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
     await screen.findByText('good · 2 points')
 
-    await user.type(screen.getByLabelText('Equals'), 'A&B ?')
+    await user.type(screen.getByLabelText('Value'), 'A&B ?')
     await user.click(screen.getByRole('button', { name: 'Apply filter' }))
 
     expect(await screen.findByText('good · showing 1 of 2 points')).toBeInTheDocument()
@@ -564,6 +564,50 @@ describe('MapPanel', () => {
       undefined,
     )
     expect(useImportSession.getState().filter).toEqual({ property: 'name', value: 'A&B ?' })
+  })
+
+  it('sends a chosen comparator, omitted from the request only when it is the default', async () => {
+    const fetchMock = mockApi({
+      '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+      '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.95, 52.4])),
+      '/api/v1/map-layers/layer-1?property=name&value=5&comparator=%3E': () =>
+        json(layer([4.9, 52.37, 4.95, 52.4], ['name'], true)),
+    })
+    const user = userEvent.setup()
+    renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+    await screen.findByText('good · 2 points')
+
+    await user.selectOptions(screen.getByLabelText('Comparator'), 'Greater than')
+    await user.type(screen.getByLabelText('Value'), '5')
+    await user.click(screen.getByRole('button', { name: 'Apply filter' }))
+
+    expect(await screen.findByText('good · showing 1 of 2 points')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/map-layers/layer-1?property=name&value=5&comparator=%3E',
+      undefined,
+    )
+    expect(useImportSession.getState().filter).toEqual({
+      property: 'name',
+      value: '5',
+      comparator: '>',
+    })
+  })
+
+  it('rejects a non-numeric value for a numeric comparator before sending a request', async () => {
+    mockApi({
+      '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+      '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.95, 52.4])),
+    })
+    const user = userEvent.setup()
+    renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+    await screen.findByText('good · 2 points')
+
+    await user.selectOptions(screen.getByLabelText('Comparator'), 'Greater than')
+    await user.type(screen.getByLabelText('Value'), 'many')
+
+    expect(screen.getByText('Must be a number.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apply filter' })).toBeDisabled()
+    expect(useImportSession.getState().filter).toBeNull()
   })
 
   it('clears the filter and shows every point again', async () => {
@@ -576,7 +620,7 @@ describe('MapPanel', () => {
     const user = userEvent.setup()
     renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
     await screen.findByText('good · 2 points')
-    await user.type(screen.getByLabelText('Equals'), 'A')
+    await user.type(screen.getByLabelText('Value'), 'A')
     await user.click(screen.getByRole('button', { name: 'Apply filter' }))
     await screen.findByText('good · showing 1 of 2 points')
 
@@ -619,7 +663,7 @@ describe('MapPanel', () => {
     const user = userEvent.setup()
     renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
     await screen.findByText('good · 2 points')
-    await user.type(screen.getByLabelText('Equals'), 'A')
+    await user.type(screen.getByLabelText('Value'), 'A')
     await user.click(screen.getByRole('button', { name: 'Apply filter' }))
     expect(await screen.findByText(/could not load the map layer: too long/i)).toBeInTheDocument()
 
@@ -683,7 +727,7 @@ describe('MapPanel', () => {
 
     await screen.findByText('good · 2 points')
 
-    expect(screen.getByLabelText('Equals')).toHaveAttribute('maxLength', '500')
+    expect(screen.getByLabelText('Value')).toHaveAttribute('maxLength', '500')
   })
 
   it('sends the filter value exactly as typed, spaces included', async () => {
@@ -697,7 +741,7 @@ describe('MapPanel', () => {
     renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
     await screen.findByText('good · 2 points')
 
-    await user.type(screen.getByLabelText('Equals'), ' A')
+    await user.type(screen.getByLabelText('Value'), ' A')
     await user.click(screen.getByRole('button', { name: 'Apply filter' }))
 
     expect(await screen.findByText('good · showing 1 of 2 points')).toBeInTheDocument()

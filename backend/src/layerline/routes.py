@@ -1,12 +1,15 @@
 import base64
 import json
+import re
 import uuid
 from datetime import datetime
+from decimal import Decimal
+from operator import ge, gt, le, lt
 from pathlib import PurePath
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, UploadFile
-from sqlalchemy import delete, func, select, tuple_
+from sqlalchemy import Numeric, case, delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from layerline.config import get_settings
@@ -73,6 +76,14 @@ MAX_PROPERTY_KEYS = 50
 # filter the API then rejects.
 MAX_PROPERTY_NAME = 100
 MAX_FILTER_VALUE = 500
+
+Comparator = Literal["=", ">", ">=", "<", "<="]
+# [0-9], not \d: \d matches any Unicode decimal digit, which would let this pattern accept text
+# Postgres's CAST(... AS NUMERIC) rejects, splitting the two "numeric" checks apart. Anchored so a
+# partial match ("12abc") isn't mistaken for a number; no exponents/inf/nan since a stored property
+# is free-form text.
+NUMERIC_VALUE = re.compile(r"^-?[0-9]+(\.[0-9]+)?$")
+_COMPARATORS = {">": gt, ">=": ge, "<": lt, "<=": le}
 
 
 def _encode_cursor(job: ImportJob) -> str:
@@ -246,9 +257,16 @@ async def get_map_layer(
         str | None, Query(alias="property", max_length=MAX_PROPERTY_NAME)
     ] = None,
     value: Annotated[str | None, Query(max_length=MAX_FILTER_VALUE)] = None,
+    comparator: Annotated[Comparator, Query()] = "=",
 ) -> MapLayerResponse:
     if (property_name is None) != (value is None):
         raise ApiError(400, "validation_failed", "`property` and `value` must be given together.")
+    if comparator != "=" and value is None:
+        raise ApiError(
+            400, "validation_failed", "`comparator` other than `=` requires `property` and `value`."
+        )
+    if comparator != "=" and value is not None and not NUMERIC_VALUE.fullmatch(value):
+        raise ApiError(400, "validation_failed", "`value` must be numeric for this comparator.")
     layer = (
         await session.execute(
             select(MapLayer).where(
@@ -286,9 +304,22 @@ async def get_map_layer(
     )
     if property_name is not None and value is not None:
         # Bound parameters on both sides: the key is data, never part of the SQL text.
-        features_query = features_query.where(
-            SpatialFeature.properties[property_name].astext == value
-        )
+        prop_text = SpatialFeature.properties[property_name].astext
+        if comparator == "=":
+            features_query = features_query.where(prop_text == value)
+        else:
+            # CASE, not a separate AND'ed regex guard: Postgres does not guarantee evaluation
+            # order between AND'ed conditions, so a plan change could run the cast before the
+            # guard and 500 on a non-numeric value. CASE always checks its condition first.
+            # A feature's value only enters the comparison if it is itself numeric; anything else
+            # (free-form text, a different unit, missing) makes it NULL, which the comparison
+            # below turns into "excluded", not an error.
+            safe_numeric = case(
+                (prop_text.op("~")(NUMERIC_VALUE.pattern), prop_text.cast(Numeric)), else_=None
+            )
+            features_query = features_query.where(
+                _COMPARATORS[comparator](safe_numeric, Decimal(value))
+            )
     rows = (await session.execute(features_query)).all()
     all_keys = (
         select(func.jsonb_object_keys(SpatialFeature.properties).label("key"))

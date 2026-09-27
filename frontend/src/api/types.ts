@@ -29,9 +29,13 @@ export interface ImportJobList {
   next_cursor: string | null
 }
 
+export type LayerFilterComparator = '=' | '>' | '>=' | '<' | '<='
+
 export interface LayerFilter {
   property: string
   value: string
+  // Omitted means '=', matching the API default; kept optional so old stored/URL state still parses.
+  comparator?: LayerFilterComparator
 }
 
 export interface ApiErrorBody {

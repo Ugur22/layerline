@@ -245,6 +245,77 @@ async def test_layer_filter_validates_input_and_treats_keys_as_data(
     assert response.json()["features"]["features"] == []
 
 
+async def test_layer_filter_defaults_to_exact_match_without_a_comparator(
+    client: httpx2.AsyncClient,
+) -> None:
+    layer_id = await imported_layer_id(
+        client, geojson_with_properties(([1, 1], {"name": "A"}), ([2, 2], {"name": "B"}))
+    )
+    default = await client.get(
+        f"/api/v1/map-layers/{layer_id}", params={"property": "name", "value": "A"}
+    )
+    explicit_eq = await client.get(
+        f"/api/v1/map-layers/{layer_id}",
+        params={"property": "name", "value": "A", "comparator": "="},
+    )
+    assert default.json()["features"] == explicit_eq.json()["features"]
+
+
+async def test_layer_filter_supports_numeric_comparators(client: httpx2.AsyncClient) -> None:
+    layer_id = await imported_layer_id(
+        client,
+        geojson_with_properties(
+            ([1, 1], {"name": "low", "cfu": 100}),
+            ([2, 2], {"name": "mid", "cfu": 500}),
+            ([3, 3], {"name": "high", "cfu": 900}),
+            # Not every feature's value for a filtered property need be numeric (open schema).
+            ([4, 4], {"name": "unitless", "cfu": "n/a"}),
+            ([5, 5], {"name": "sub_zero", "cfu": -12.5}),
+            ([6, 6], {"name": "no_cfu"}),
+        ),
+    )
+
+    def matched(body: dict[str, Any]) -> list[str]:
+        return sorted(f["properties"]["name"] for f in body["features"]["features"])
+
+    async def filtered(comparator: str, value: str) -> dict[str, Any]:
+        response = await client.get(
+            f"/api/v1/map-layers/{layer_id}",
+            params={"property": "cfu", "value": value, "comparator": comparator},
+        )
+        assert response.status_code == 200, response.text
+        body: dict[str, Any] = response.json()
+        return body
+
+    assert matched(await filtered(">", "500")) == ["high"]
+    assert matched(await filtered(">=", "500")) == ["high", "mid"]
+    assert matched(await filtered("<", "500")) == ["low", "sub_zero"]
+    assert matched(await filtered("<=", "500")) == ["low", "mid", "sub_zero"]
+    # A negative, non-integer value as input, compared against a negative stored value.
+    assert matched(await filtered("<", "-1")) == ["sub_zero"]
+    # Excluded rather than crashing the numeric cast, since properties are untyped text —
+    # same for a feature that never had the property at all.
+    result = matched(await filtered(">", "-999"))
+    assert "unitless" not in result
+    assert "no_cfu" not in result
+
+
+async def test_layer_filter_comparator_validates_input(client: httpx2.AsyncClient) -> None:
+    layer_id = await imported_layer_id(
+        client, geojson_with_properties(([1, 1], {"name": "A", "cfu": 100}))
+    )
+
+    async def rejected(**params: str) -> None:
+        response = await client.get(f"/api/v1/map-layers/{layer_id}", params=params)
+        assert response.status_code == 400, params
+        assert response.json()["error"]["code"] == "validation_failed"
+
+    await rejected(property="cfu", value="100", comparator="!=")  # not a known comparator
+    await rejected(property="cfu", value="many", comparator=">")  # value isn't numeric
+    await rejected(property="cfu", value="1e5", comparator=">")  # no scientific notation
+    await rejected(comparator=">")  # comparator without property/value
+
+
 async def test_property_keys_list_what_the_filter_can_use(client: httpx2.AsyncClient) -> None:
     long_key = "k" * 101
     layer_id = await imported_layer_id(

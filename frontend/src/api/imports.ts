@@ -64,7 +64,14 @@ export function getMapLayer(
 ): Promise<MapLayerResponse> {
   // URLSearchParams encodes the user's text, so odd characters cannot alter the request.
   const query = filter
-    ? `?${new URLSearchParams({ property: filter.property, value: filter.value }).toString()}`
+    ? `?${new URLSearchParams({
+        property: filter.property,
+        value: filter.value,
+        // Omit when '=': keeps the request byte-identical to before comparators existed.
+        ...(filter.comparator && filter.comparator !== '='
+          ? { comparator: filter.comparator }
+          : {}),
+      }).toString()}`
     : ''
   return requestJson<MapLayerResponse>(`/api/v1/map-layers/${mapLayerId}${query}`)
 }
