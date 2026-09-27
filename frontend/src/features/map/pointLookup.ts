@@ -46,11 +46,11 @@ export function resolveCallouts(
   const resolved: ResolvedCallout[] = []
   for (const callout of callouts) {
     const index = byId.get(callout.id)
-    const feature = index === undefined ? undefined : features[index]
-    if (index !== undefined && feature) {
-      const [lon = 0, lat = 0] = feature.geometry.coordinates
-      resolved.push({ index, coordinates: [lon, lat], text: callout.text })
-    }
+    if (index === undefined) continue
+    const feature = features[index]
+    if (!feature) continue
+    const [lon = 0, lat = 0] = feature.geometry.coordinates
+    resolved.push({ index, coordinates: [lon, lat], text: callout.text })
   }
   return resolved
 }

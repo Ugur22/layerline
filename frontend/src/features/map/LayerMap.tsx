@@ -45,10 +45,9 @@ const HOVER_RING = 3
 const PINNED_RING = 5
 const CALLOUT_CLASS =
   'pointer-events-none rounded-md bg-background/95 px-2 py-1 text-xs font-medium whitespace-nowrap shadow-sm ring-1 ring-border'
-// Clears the largest point (see MAX_RADIUS) plus its ring, so the tooltip never covers the point.
+// Clears the largest point (see MAX_RADIUS) plus its ring, so a tooltip or callout never covers it
+// (a callout can land on the largest point too, e.g. "Highest" on a numeric chapter's own max).
 const HOVER_OFFSET = 22
-// A callout can land on the largest point too (e.g. "Highest" on a numeric chapter's own max).
-const CALLOUT_OFFSET = HOVER_OFFSET
 // Must exist in the basemap's glyph set (ADR 0009 allows any style); this is the default style's.
 // Collision handling hides overlapping labels, so no zoom threshold is needed.
 const LABEL_FONT = 'Noto Sans Regular'
@@ -334,7 +333,7 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
                 longitude={callout.coordinates[0]}
                 latitude={callout.coordinates[1]}
                 anchor={below ? 'top' : 'bottom'}
-                offset={below ? [0, CALLOUT_OFFSET] : [0, -CALLOUT_OFFSET]}
+                offset={below ? [0, HOVER_OFFSET] : [0, -HOVER_OFFSET]}
               >
                 <span className={CALLOUT_CLASS} aria-hidden>
                   {callout.text}
