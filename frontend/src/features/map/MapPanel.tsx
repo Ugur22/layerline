@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import { match } from 'ts-pattern'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,13 +15,43 @@ const LayerMap = lazy(() => import('./LayerMap').then((m) => ({ default: m.Layer
 
 export function MapPanel({ pollIntervalMs = 1000 }: { pollIntervalMs?: number }) {
   const { jobId, filter, setFilter } = useImportSession()
-  const layerId = useImportJob(jobId, pollIntervalMs).data?.map_layer_id
+  const job = useImportJob(jobId, pollIntervalMs)
+  const layerId = job.data?.map_layer_id
   const layer = useMapLayer(layerId, filter)
   // Same query as `layer` while no filter is set; otherwise one extra fetch so colours stay stable.
   const fullLayer = useMapLayer(layerId, null)
 
-  // The map only exists once an import has produced a layer.
-  if (!layerId) return null
+  // The map only exists once an import has produced a layer; guide toward one instead of a blank
+  // panel. ImportsList auto-selects the most recent succeeded import, so landing here with nothing
+  // selected means there genuinely isn't one yet (no imports, or none has finished processing).
+  if (!layerId) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Map</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="flex min-h-96 items-center justify-center p-8 text-center text-sm text-muted-foreground">
+            {match(job.data?.status)
+              .with(
+                'queued',
+                'processing',
+                () => 'Importing your file — its map will appear here once it finishes.',
+              )
+              .with(
+                'failed',
+                () =>
+                  'This import failed. Choose another import on the left, or fix and re-upload the file.',
+              )
+              .otherwise(
+                () =>
+                  'Select an import on the left to view its map, or upload a survey file to get started.',
+              )}
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   const total = layer.data?.map_layer.feature_count
   const shown = layer.data?.features.features.length

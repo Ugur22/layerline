@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { match } from 'ts-pattern'
 import { clearImports } from '@/api/imports'
 import type { ImportJob } from '@/api/types'
@@ -23,13 +23,35 @@ function StatusBadge({ status }: { status: ImportJob['status'] }) {
 export function ImportsList({ pollIntervalMs = 1000 }: { pollIntervalMs?: number }) {
   const { jobId, setJobId } = useImportSession()
   const list = useImportList(DEV_DATASET_ID, pollIntervalMs)
-  const jobs = list.data?.pages.flatMap((page) => page.import_jobs) ?? []
+  const jobs = useMemo(
+    () => list.data?.pages.flatMap((page) => page.import_jobs) ?? [],
+    [list.data],
+  )
   const queryClient = useQueryClient()
+
+  // Land on the most recent usable map rather than a blank map panel — including the case where
+  // the only imports so far are still processing, once one of them succeeds. Fires at most once:
+  // a null jobId after that (e.g. from "Clear imports") means there is nothing to select, not
+  // "pick again", so it must not fight a deliberate clear.
+  const autoSelected = useRef(false)
+  useEffect(() => {
+    if (autoSelected.current || jobId !== null || !list.isSuccess) return
+    const mostRecent = jobs.find((candidate) => candidate.status === 'succeeded')
+    if (mostRecent) {
+      autoSelected.current = true
+      setJobId(mostRecent.id)
+    }
+  }, [jobId, jobs, list.isSuccess, setJobId])
+
   const [confirming, setConfirming] = useState(false)
   const clear = useMutation({
     mutationFn: () => clearImports(DEV_DATASET_ID),
     onSuccess: async () => {
-      // The selected import may be gone, and a request for it would only 404.
+      // The selected import may be gone, and a request for it would only 404. Mark this null as
+      // deliberate before the list refetches: while it's still in flight, `jobs` is briefly the
+      // stale pre-delete list, and auto-select would otherwise re-select from it before the
+      // response arrives.
+      autoSelected.current = true
       setJobId(null)
       setConfirming(false)
       await queryClient.invalidateQueries({ queryKey: ['imports', DEV_DATASET_ID] })

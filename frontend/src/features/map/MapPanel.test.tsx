@@ -162,14 +162,38 @@ describe('MapPanel', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders nothing before an import exists', () => {
+  it('guides toward selecting or uploading an import before one exists, without fetching a layer', () => {
     useImportSession.setState({ jobId: null })
     const fetchMock = mockApi({})
 
     renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
 
+    expect(screen.getByText(/select an import on the left/i)).toBeInTheDocument()
     expect(screen.queryByTestId('map')).not.toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('says an import is still processing instead of showing a blank map', async () => {
+    mockApi({
+      '/api/v1/imports/job-1': () =>
+        json({ import_job: job({ status: 'processing', map_layer_id: null }) }),
+    })
+
+    renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+
+    expect(await screen.findByText(/importing your file/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('map')).not.toBeInTheDocument()
+  })
+
+  it('points at another import when the selected one failed', async () => {
+    mockApi({
+      '/api/v1/imports/job-1': () =>
+        json({ import_job: job({ status: 'failed', map_layer_id: null, feature_count: null }) }),
+    })
+
+    renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+
+    expect(await screen.findByText(/this import failed/i)).toBeInTheDocument()
   })
 
   it('does not request a layer while the import has none', async () => {

@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { act, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ImportJob, ImportJobList } from '@/api/types'
@@ -77,6 +77,48 @@ describe('ImportsList', () => {
 
     expect(useImportSession.getState().jobId).toBe('a')
     expect(first).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('auto-selects the most recently succeeded import when nothing is selected', async () => {
+    mockList({
+      [LIST_URL]: [json(page([job('a', { status: 'failed', feature_count: null }), job('b')]))],
+    })
+    renderWithClient(<ImportsList pollIntervalMs={POLL_MS} />)
+
+    await screen.findByRole('button', { name: /a\.geojson/ })
+
+    // 'a' is newer but failed; 'b' is the most recent one with an actual map to show.
+    expect(useImportSession.getState().jobId).toBe('b')
+    expect(screen.getByRole('button', { name: /b\.geojson/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('does not auto-select while nothing has succeeded yet', async () => {
+    mockList({
+      [LIST_URL]: [json(page([job('a', { status: 'processing', map_layer_id: null })]))],
+    })
+    renderWithClient(<ImportsList pollIntervalMs={POLL_MS} />)
+
+    await screen.findByText('Processing')
+
+    expect(useImportSession.getState().jobId).toBeNull()
+  })
+
+  it('does not fight a deliberate clear by reselecting once it already has', async () => {
+    mockList({ [LIST_URL]: [json(page([job('a')]))] })
+    renderWithClient(<ImportsList pollIntervalMs={POLL_MS} />)
+    await screen.findByRole('button', { name: /a\.geojson/ })
+    expect(useImportSession.getState().jobId).toBe('a')
+
+    // What "Clear imports" does to the session once its request succeeds.
+    act(() => {
+      useImportSession.getState().setJobId(null)
+    })
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 3))
+
+    expect(useImportSession.getState().jobId).toBeNull()
   })
 
   it('clears the map filter when another import is selected', async () => {
