@@ -5,6 +5,7 @@ import type { PointFeatureCollection } from '@/api/types'
 import { buildColorScheme, type DrawableColorScheme } from './layerStyle'
 import { useMapInspection } from './mapInspection'
 import { PROFILE_MARGIN, PROFILE_Y_AXIS_WIDTH } from './profileLayout'
+import type { ResolvedCallout } from './pointLookup'
 import { ValueProfile } from './ValueProfile'
 
 // jsdom has no layout. The chart renders at the size its container starts with, and the pointer
@@ -54,6 +55,7 @@ function renderProfile(overrides: Partial<Parameters<typeof ValueProfile>[0]> = 
       valueKey="depth_m"
       onKeyChange={() => undefined}
       scheme={null}
+      callouts={[]}
       {...overrides}
     />,
   )
@@ -233,6 +235,7 @@ describe('ValueProfile', () => {
             valueKey="depth_m"
             onKeyChange={() => undefined}
             scheme={null}
+            callouts={[]}
           />,
         )
         const [left, right] = chipBounds()
@@ -426,5 +429,50 @@ describe('ValueProfile', () => {
 
       expect(container.querySelectorAll('.recharts-reference-area')).toHaveLength(1)
     })
+  })
+})
+
+describe('ValueProfile callouts', () => {
+  function callout(index: number, text: string): ResolvedCallout {
+    const feature = features.features[index]
+    const [lon = 0, lat = 0] = feature?.geometry.coordinates ?? []
+    return { index, coordinates: [lon, lat], text }
+  }
+
+  it('marks a callout point and labels it', () => {
+    renderProfile({ callouts: [callout(0, 'Start')] })
+
+    expect(screen.getByTestId('profile-callout')).toHaveTextContent('Start')
+  })
+
+  it('shows more than one callout at once', () => {
+    renderProfile({ callouts: [callout(0, 'Start'), callout(3, 'End')] })
+
+    expect(screen.getAllByTestId('profile-callout')).toHaveLength(2)
+  })
+
+  it('draws no callout mark without any callouts', () => {
+    renderProfile()
+
+    expect(screen.queryByTestId('profile-callout')).not.toBeInTheDocument()
+  })
+
+  it('keeps a callout chip inside the plot, even for the very first or last point', () => {
+    renderProfile({ callouts: [callout(0, 'Lowest · 8.1'), callout(3, 'Highest · 47.2')] })
+
+    for (const chip of screen.getAllByTestId('profile-callout')) {
+      const rect = chip.querySelector('rect')
+      const x = Number(rect?.getAttribute('x'))
+      expect(x).toBeGreaterThanOrEqual(PROFILE_Y_AXIS_WIDTH)
+      expect(x + Number(rect?.getAttribute('width'))).toBeLessThanOrEqual(WIDTH - MARGIN_RIGHT)
+    }
+  })
+
+  it('does not let a permanent callout hide the interactive cursor', () => {
+    const { container } = renderProfile({ callouts: [callout(3, 'Highest · 47.2')] })
+
+    point(container, columnX(3))
+
+    expect(screen.getByTestId('profile-cursor')).toHaveTextContent('S-004 · 47.2')
   })
 })

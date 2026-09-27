@@ -476,6 +476,28 @@ test('the story tells what the north sea sample shows and sets the map to show i
   expect(problems).toEqual([])
 })
 
+test('the story marks its callouts on the map and the chart', async ({ page }) => {
+  const problems = watchBrowserHealth(page)
+  await upload(page, 'north-sea-survey.csv', uniqueName('callouts', 'csv'))
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+
+  const map = page.locator('.maplibregl-map')
+  await expect(map.getByText('Start · S-001')).toBeVisible()
+  await expect(map.getByText('End · S-040')).toBeVisible()
+
+  const story = page.getByRole('region', { name: 'What you are looking at' })
+  await story.getByRole('button', { name: 'Next' }).click()
+  await story.getByRole('button', { name: 'Next' }).click()
+  await expect(story).toContainText('depth_m: 8.1 to 47.2')
+
+  const chart = page.locator('.recharts-wrapper')
+  await chart.scrollIntoViewIfNeeded()
+  await expect(chart.getByText('Lowest · 8.1')).toBeVisible()
+  await expect(chart.getByText('Highest · 47.2')).toBeVisible()
+  await expect(page.locator('[data-map-ready="true"]')).toBeVisible()
+  expect(problems).toEqual([])
+})
+
 test('an invalid CSV reports spreadsheet row numbers', async ({ page }) => {
   await upload(page, 'bad-rows.csv', uniqueName('badcsv', 'csv'))
 

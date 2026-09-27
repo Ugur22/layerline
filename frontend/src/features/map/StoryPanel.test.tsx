@@ -88,6 +88,24 @@ describe('StoryPanel', () => {
   })
 
   describe('setting the map', () => {
+    it("applies each chapter its own callouts, not the previous chapter's", async () => {
+      const user = userEvent.setup()
+      renderPanel()
+      expect(useMapView.getState().callouts).toEqual([
+        { id: '0', text: 'Start · S-01' },
+        { id: '11', text: 'End · S-12' },
+      ])
+
+      await user.click(screen.getByRole('button', { name: 'Next' }))
+      expect(useMapView.getState().callouts).toEqual([{ id: '6', text: 'A ends · B begins' }])
+
+      await user.click(screen.getByRole('button', { name: 'Next' }))
+      expect(useMapView.getState().callouts).toEqual([
+        { id: '0', text: 'Lowest · 10' },
+        { id: '11', text: 'Highest · 131' },
+      ])
+    })
+
     it('starts each layer from a clean view, not from what the last one left', () => {
       useMapView.getState().setLabelKey('name')
       useMapView.getState().setSizeKey('depth')

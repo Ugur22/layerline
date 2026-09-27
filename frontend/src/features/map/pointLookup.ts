@@ -1,4 +1,4 @@
-import type { PointFeatureCollection } from '@/api/types'
+import type { PointFeature, PointFeatureCollection } from '@/api/types'
 import type { InspectedPoint } from './mapInspection'
 
 // The map reports a point's position rounded to its tiles and its properties flattened, so a hit is
@@ -28,4 +28,29 @@ export function inspectedPointAt(
   if (!feature) return null
   const [lon = 0, lat = 0] = feature.geometry.coordinates
   return { data: features, index, coordinates: [lon, lat], properties: { ...feature.properties } }
+}
+
+export interface ResolvedCallout {
+  index: number
+  coordinates: [number, number]
+  text: string
+}
+
+// A story chapter's callouts name a point by its id, so they still find it whichever list of
+// features it is looked up in: the whole layer, or the fewer points a filter shows.
+export function resolveCallouts(
+  features: readonly PointFeature[],
+  callouts: readonly { id: string; text: string }[],
+): ResolvedCallout[] {
+  const byId = new Map(features.map((feature, index) => [feature.id, index]))
+  const resolved: ResolvedCallout[] = []
+  for (const callout of callouts) {
+    const index = byId.get(callout.id)
+    const feature = index === undefined ? undefined : features[index]
+    if (index !== undefined && feature) {
+      const [lon = 0, lat = 0] = feature.geometry.coordinates
+      resolved.push({ index, coordinates: [lon, lat], text: callout.text })
+    }
+  }
+  return resolved
 }

@@ -51,6 +51,15 @@ vi.mock('react-map-gl/maplibre', async () => {
       }),
     Popup: (props: { children: unknown }) =>
       React.createElement('div', { 'data-testid': 'popup' }, props.children as never),
+    Marker: (props: { longitude: number; latitude: number; children: unknown }) =>
+      React.createElement(
+        'div',
+        {
+          'data-testid': 'map-callout',
+          'data-lnglat': JSON.stringify([props.longitude, props.latitude]),
+        },
+        props.children as never,
+      ),
   }
 })
 
@@ -312,6 +321,101 @@ describe('MapPanel', () => {
         expect(screen.getByRole('radio', { name: 'None' })).toBeEnabled()
       })
       expect(screen.queryByText(/along the file order/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('story callouts', () => {
+    it('marks the start and end points on the map, at their own coordinates', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.95, 52.4])),
+      })
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+
+      const callouts = await screen.findAllByTestId('map-callout')
+
+      expect(callouts.map((el) => el.textContent)).toEqual(
+        expect.arrayContaining([expect.stringContaining('Start'), expect.stringContaining('End')]),
+      )
+      const coordinates = callouts.map(
+        (el) => JSON.parse(el.getAttribute('data-lnglat') ?? '[]') as number[],
+      )
+      expect(coordinates).toContainEqual([4.9, 52.37])
+      expect(coordinates).toContainEqual([4.95, 52.4])
+    })
+
+    it('draws no callout for a single-point layer, whose overview has none', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.9, 52.37], ['name'], true)),
+      })
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+
+      await screen.findByText('good · 2 points')
+
+      expect(screen.queryByTestId('map-callout')).not.toBeInTheDocument()
+    })
+
+    it('drops a callout whose point a filter has hidden, rather than floating over nothing', async () => {
+      const rows = [
+        { name: 'S1', group: 'A' },
+        { name: 'S2', group: 'A' },
+        { name: 'S3', group: 'B' },
+        { name: 'S4', group: 'B' },
+      ]
+      const whole = layerWithProperties(rows, ['group', 'name'])
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(whole),
+        '/api/v1/map-layers/layer-1?property=group&value=B': () =>
+          json({
+            ...whole,
+            features: { ...whole.features, features: whole.features.features.slice(2) },
+          }),
+      })
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      await screen.findByText('good · 4 points')
+      expect(await screen.findAllByTestId('map-callout')).toHaveLength(2)
+
+      act(() => {
+        useImportSession.getState().setFilter({ property: 'group', value: 'B' })
+      })
+      await screen.findByText('good · showing 2 of 4 points')
+
+      // S1 (the Start callout) is gone from this view; S4 (the End callout) is still shown.
+      const callouts = screen.getAllByTestId('map-callout')
+      expect(callouts.map((el) => el.textContent)).not.toContain('Start · S1')
+      expect(callouts.map((el) => el.textContent)).toEqual(expect.arrayContaining(['End · S4']))
+    })
+
+    it('drops a callout once the reader recolours, resizes or re-charts what it was about', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () =>
+          json(
+            layerWithProperties(
+              [
+                { name: 'a', depth: '1' },
+                { name: 'b', depth: '2' },
+                { name: 'c', depth: '9' },
+              ],
+              ['depth', 'name'],
+            ),
+          ),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      const story = await screen.findByRole('region', { name: /what you are looking at/i })
+      await user.click(within(story).getByRole('button', { name: 'Next' }))
+      expect(await screen.findAllByTestId('map-callout')).toHaveLength(2)
+
+      await user.click(
+        within(screen.getByRole('radiogroup', { name: 'Colour by' })).getByRole('radio', {
+          name: 'None',
+        }),
+      )
+
+      expect(screen.queryByTestId('map-callout')).not.toBeInTheDocument()
     })
   })
 

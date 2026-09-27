@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Map, {
   Layer,
+  Marker,
   Popup,
   Source,
   type MapLayerMouseEvent,
@@ -30,7 +31,8 @@ import {
 } from './layerStyle'
 import { useMapInspection, type InspectedPoint } from './mapInspection'
 import { useMapView } from './mapView'
-import { inspectedPointAt, nearestFeatureIndex } from './pointLookup'
+import { calloutPlacement } from './calloutPlacement'
+import { inspectedPointAt, nearestFeatureIndex, resolveCallouts } from './pointLookup'
 import { trackGradient, trackLine, type TrackLine } from './track'
 import { ValueProfile } from './ValueProfile'
 import { prefersReducedMotion, useTrackProgress } from './useTrackProgress'
@@ -41,8 +43,12 @@ const LABELS_LAYER_ID = 'layer-labels'
 const TRACK_LAYER_ID = 'layer-track'
 const HOVER_RING = 3
 const PINNED_RING = 5
+const CALLOUT_CLASS =
+  'pointer-events-none rounded-md bg-background/95 px-2 py-1 text-xs font-medium whitespace-nowrap shadow-sm ring-1 ring-border'
 // Clears the largest point (see MAX_RADIUS) plus its ring, so the tooltip never covers the point.
 const HOVER_OFFSET = 22
+// A callout can land on the largest point too (e.g. "Highest" on a numeric chapter's own max).
+const CALLOUT_OFFSET = HOVER_OFFSET
 // Must exist in the basemap's glyph set (ADR 0009 allows any style); this is the default style's.
 // Collision handling hides overlapping labels, so no zoom threshold is needed.
 const LABEL_FONT = 'Noto Sans Regular'
@@ -121,6 +127,7 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   const hidden = useMapView((state) => state.hidden)
   const showTrack = useMapView((state) => state.showTrack)
   const profileKey = useMapView((state) => state.profileKey)
+  const callouts = useMapView((state) => state.callouts)
   const { setColorKey, setSizeKey, setLabelKey, setShowTrack, setProfileKey } =
     useMapView.getState()
   const hover = useMapInspection((state) => state.hover)
@@ -166,6 +173,12 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
   // Resting on the pinned point would stack two rings on it.
   const hoverIsPinned = activeHover !== null && activeHover.index === activePinned?.index
   const pointRadius = sizeScale ? radiusExpression(sizeScale) : DEFAULT_RADIUS
+  // Callouts name a point by id, resolved against the same points the map and chart currently
+  // draw: a callout a filter has hidden disappears from both, rather than floating over nothing.
+  const resolvedCallouts = useMemo(
+    () => resolveCallouts(layer.features.features, callouts),
+    [layer.features, callouts],
+  )
 
   // Tell the inspector which points are dimmed, so stepping can skip them.
   useEffect(() => {
@@ -313,6 +326,22 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
               <FeatureTooltipContent properties={activeHover.properties} />
             </Popup>
           )}
+          {resolvedCallouts.map((callout) => {
+            const below = calloutPlacement(callout.coordinates[1], bounds) === 'below'
+            return (
+              <Marker
+                key={callout.index}
+                longitude={callout.coordinates[0]}
+                latitude={callout.coordinates[1]}
+                anchor={below ? 'top' : 'bottom'}
+                offset={below ? [0, CALLOUT_OFFSET] : [0, -CALLOUT_OFFSET]}
+              >
+                <span className={CALLOUT_CLASS} aria-hidden>
+                  {callout.text}
+                </span>
+              </Marker>
+            )
+          })}
         </Map>
 
         {(propertyKeys.length > 0 || track) && (
@@ -371,6 +400,7 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
           valueKey={resolvedProfileKey}
           onKeyChange={setProfileKey}
           scheme={drawableScheme}
+          callouts={resolvedCallouts}
         />
       )}
     </div>

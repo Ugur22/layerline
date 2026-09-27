@@ -4,6 +4,7 @@ import {
   CartesianGrid,
   ComposedChart,
   ReferenceArea,
+  ReferenceDot,
   ReferenceLine,
   usePlotArea,
   XAxis,
@@ -15,7 +16,7 @@ import { ChartContainer, type ChartConfig } from '@/components/ui/chart'
 import { ToggleControl } from './LayerControls'
 import { type DrawableColorScheme } from './layerStyle'
 import { useMapInspection } from './mapInspection'
-import { inspectedPointAt } from './pointLookup'
+import { inspectedPointAt, type ResolvedCallout } from './pointLookup'
 import { indexAtX } from './profile'
 import { PROFILE_MARGIN, PROFILE_Y_AXIS_WIDTH } from './profileLayout'
 import { buildProfile } from './profileModel'
@@ -44,6 +45,8 @@ interface ValueProfileProps {
   onKeyChange: (key: string) => void
   // Colours the dots as the map colours its points; a categorical one also shades its stretches.
   scheme: DrawableColorScheme | null
+  // The story's callouts that name a point still in this view (@see resolveCallouts).
+  callouts: ResolvedCallout[]
 }
 
 // Where the label's shape is; Recharts hands it over as a union that also covers polar charts.
@@ -52,13 +55,23 @@ function boxOf(viewBox: unknown): { x: number; y: number; width: number } {
   return { x: box.x ?? 0, y: box.y ?? 0, width: box.width ?? 0 }
 }
 
+// A chip's width, estimated from its text, and its left edge kept inside the plot at either end.
+function chipBox(
+  centerX: number,
+  text: string,
+  plot: { x: number; width: number } | null | undefined,
+) {
+  const width = text.length * 6.2 + 14
+  const centred = centerX - width / 2
+  const left = plot ? Math.min(Math.max(centred, plot.x), plot.x + plot.width - width) : centred
+  return { left, width }
+}
+
 // The chip that names the point at the cursor, kept inside the plot at either end.
 function CursorChip({ viewBox, text }: { viewBox?: unknown; text: string }) {
   const plot = usePlotArea()
   const { x, y } = boxOf(viewBox)
-  const width = text.length * 6.2 + 14
-  const centred = x - width / 2
-  const left = plot ? Math.min(Math.max(centred, plot.x), plot.x + plot.width - width) : centred
+  const { left, width } = chipBox(x, text, plot)
   return (
     <g data-testid="profile-cursor" pointerEvents="none">
       <rect x={left} y={y - 24} width={width} height={20} rx={6} className="fill-primary" />
@@ -104,6 +117,35 @@ function EdgeTick({
   )
 }
 
+// A callout stays on screen regardless of hover or pin; it marks one point the story called out.
+// The story text already names this point, so the chip is decorative and hidden from screen readers.
+function CalloutMark({ cx, cy, text }: { cx: number; cy: number; text: string }) {
+  const plot = usePlotArea()
+  const { left, width } = chipBox(cx, text, plot)
+  return (
+    <g data-testid="profile-callout" pointerEvents="none" aria-hidden>
+      <circle cx={cx} cy={cy} r={5} fill="none" stroke="currentColor" strokeWidth={1.5} />
+      <rect
+        x={left}
+        y={cy - 28}
+        width={width}
+        height={18}
+        rx={5}
+        className="fill-background stroke-border"
+        strokeWidth={1}
+      />
+      <text
+        x={left + width / 2}
+        y={cy - 15}
+        textAnchor="middle"
+        className="fill-muted-foreground text-[10px] font-medium"
+      >
+        {text}
+      </text>
+    </g>
+  )
+}
+
 interface DotProps {
   cx?: number
   cy?: number
@@ -111,7 +153,14 @@ interface DotProps {
 }
 
 // A value along the file order, linked to the map through the shared hover and pinned point.
-export function ValueProfile({ features, keys, valueKey, onKeyChange, scheme }: ValueProfileProps) {
+export function ValueProfile({
+  features,
+  keys,
+  valueKey,
+  onKeyChange,
+  scheme,
+  callouts,
+}: ValueProfileProps) {
   const hover = useMapInspection((state) => state.hover)
   const pinned = useMapInspection((state) => state.pinned)
   const hiddenIndexes = useMapInspection((state) => state.hiddenIndexes)
@@ -297,6 +346,24 @@ export function ValueProfile({ features, keys, valueKey, onKeyChange, scheme }: 
                     : false
                 }
               />
+              {callouts.map((c) => {
+                const value = rows[c.index]?.value
+                return value === null || value === undefined ? null : (
+                  <ReferenceDot
+                    key={c.index}
+                    x={c.index}
+                    y={value}
+                    ifOverflow="visible"
+                    shape={({ cx, cy }: { cx?: number; cy?: number }) =>
+                      typeof cx === 'number' && typeof cy === 'number' ? (
+                        <CalloutMark cx={cx} cy={cy} text={c.text} />
+                      ) : (
+                        <g />
+                      )
+                    }
+                  />
+                )
+              })}
               {activeIndex !== null && (
                 <ReferenceLine
                   x={activeIndex}

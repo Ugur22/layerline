@@ -70,6 +70,54 @@ describe('useMapView', () => {
     })
   })
 
+  it('starts with no callouts, applies them with a chapter style, and clears them on reset', () => {
+    expect(useMapView.getState().callouts).toEqual([])
+
+    useMapView
+      .getState()
+      .apply({ colorKey: 'campaign', sizeKey: '', profileKey: 'depth', track: true }, [
+        { id: 'a', text: 'Start' },
+      ])
+    expect(useMapView.getState().callouts).toEqual([{ id: 'a', text: 'Start' }])
+
+    useMapView.getState().reset()
+
+    expect(useMapView.getState().callouts).toEqual([])
+  })
+
+  it('drops the callouts once the reader changes what they were about', () => {
+    const callouts = [{ id: 'a', text: 'Lowest · 1' }]
+
+    useMapView
+      .getState()
+      .apply({ colorKey: 'd', sizeKey: 'd', profileKey: 'd', track: true }, callouts)
+    useMapView.getState().setColorKey('other')
+    expect(useMapView.getState().callouts).toEqual([])
+
+    useMapView
+      .getState()
+      .apply({ colorKey: 'd', sizeKey: 'd', profileKey: 'd', track: true }, callouts)
+    useMapView.getState().setSizeKey('other')
+    expect(useMapView.getState().callouts).toEqual([])
+
+    useMapView
+      .getState()
+      .apply({ colorKey: 'd', sizeKey: 'd', profileKey: 'd', track: true }, callouts)
+    useMapView.getState().setProfileKey('other')
+    expect(useMapView.getState().callouts).toEqual([])
+  })
+
+  it('keeps the callouts when only the label changes, since they are not about it', () => {
+    const callouts = [{ id: 'a', text: 'Lowest · 1' }]
+    useMapView
+      .getState()
+      .apply({ colorKey: 'd', sizeKey: '', profileKey: 'd', track: true }, callouts)
+
+    useMapView.getState().setLabelKey('name')
+
+    expect(useMapView.getState().callouts).toEqual(callouts)
+  })
+
   it('goes back to the start on reset', () => {
     useMapView.getState().apply({ colorKey: 'a', sizeKey: 'b', profileKey: 'c', track: true })
     useMapView.getState().setLabelKey('name')

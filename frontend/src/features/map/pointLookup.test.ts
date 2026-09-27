@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PointFeatureCollection } from '@/api/types'
-import { inspectedPointAt, nearestFeatureIndex } from './pointLookup'
+import { inspectedPointAt, nearestFeatureIndex, resolveCallouts } from './pointLookup'
 
 const features: PointFeatureCollection = {
   type: 'FeatureCollection',
@@ -68,5 +68,33 @@ describe('inspectedPointAt', () => {
   it('has no point beyond the ends', () => {
     expect(inspectedPointAt(features, -1)).toBeNull()
     expect(inspectedPointAt(features, 3)).toBeNull()
+  })
+})
+
+describe('resolveCallouts', () => {
+  const list = features.features
+
+  it('finds each callout point by id and gives its index and coordinates', () => {
+    const resolved = resolveCallouts(list, [
+      { id: 'b', text: 'Highest · 9' },
+      { id: 'a', text: 'Start' },
+    ])
+
+    expect(resolved).toEqual([
+      { index: 1, coordinates: [5, 53], text: 'Highest · 9' },
+      { index: 0, coordinates: [4, 52], text: 'Start' },
+    ])
+  })
+
+  it('leaves out a callout whose point is not in this list of features', () => {
+    expect(resolveCallouts(list, [{ id: 'not-here', text: 'x' }])).toEqual([])
+  })
+
+  it('resolves against a shorter, filtered list using the same ids', () => {
+    const filtered = [list[2], list[0]].filter((f): f is (typeof list)[number] => f !== undefined)
+
+    expect(resolveCallouts(filtered, [{ id: 'a', text: 'Start' }])).toEqual([
+      { index: 1, coordinates: [4, 52], text: 'Start' },
+    ])
   })
 })

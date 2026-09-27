@@ -4,7 +4,18 @@ import type { PointFeature } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useMapView } from './mapView'
-import { buildStory } from './story/buildStory'
+import { buildStory, type StoryCallout } from './story/buildStory'
+
+// Callouts name a point by its index in the chapter's own feature list; resolved to ids up front,
+// so the map and chart can find them again in whichever features they show.
+function withIds(features: readonly PointFeature[], callouts: readonly StoryCallout[]) {
+  return callouts
+    .map((callout) => {
+      const id = features[callout.index]?.id
+      return id ? { id, text: callout.text } : null
+    })
+    .filter((callout): callout is { id: string; text: string } => callout !== null)
+}
 
 interface StoryPanelProps {
   // The whole layer, not a filtered view, so the story does not change while filtering.
@@ -21,23 +32,27 @@ export function StoryPanel({ features, propertyKeys }: StoryPanelProps) {
   const last = chapters.length - 1
   const current = Math.min(position, last)
   const chapter = chapters[current]
-  // The chapter the story opens on. Held apart from `chapters`, which is rebuilt whenever the
-  // data arrives again, so that only the reader moving between chapters changes the map.
-  const [opening] = useState(chapters[0])
+  // The chapter the story opens on, and its callouts already resolved. Held apart from `chapters`,
+  // which is rebuilt whenever the data arrives again, so that only the reader moving between
+  // chapters changes the map — not a fresh-but-equal `features` array turning up.
+  const [{ opening, openingCallouts }] = useState(() => {
+    const first = chapters[0]
+    return { opening: first, openingCallouts: first ? withIds(features, first.callouts) : [] }
+  })
 
   // The panel is remounted for each layer, so this starts that layer from a clean view instead of
   // whatever the previous one left behind, then shows the opening chapter.
   useEffect(() => {
     const view = useMapView.getState()
     view.reset()
-    if (opening) view.apply(opening.style)
-  }, [opening])
+    if (opening) view.apply(opening.style, openingCallouts)
+  }, [opening, openingCallouts])
 
   function go(index: number) {
     const target = chapters[index]
     if (!target) return
     setPosition(index)
-    useMapView.getState().apply(target.style)
+    useMapView.getState().apply(target.style, withIds(features, target.callouts))
   }
 
   if (!chapter) return null
