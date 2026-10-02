@@ -1,3 +1,4 @@
+import { Minus, Plus, RotateCcw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Map, {
   Layer,
@@ -11,6 +12,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import './maplibreWorker'
 import type { ExpressionSpecification } from 'maplibre-gl'
 import type { MapLayerResponse, PointFeature } from '@/api/types'
+import { Button } from '@/components/ui/button'
 import { BASEMAP_STYLE_URL } from '@/config'
 import { boundsFor } from './bounds'
 import { FIT_PADDING } from './fitPadding'
@@ -51,6 +53,8 @@ const HOVER_OFFSET = 22
 // Must exist in the basemap's glyph set (ADR 0009 allows any style); this is the default style's.
 // Collision handling hides overlapping labels, so no zoom threshold is needed.
 const LABEL_FONT = 'Noto Sans Regular'
+const ZOOM_ANIMATION_MS = 300
+const RESET_ANIMATION_MS = 500
 
 const NOTE_CLASS =
   'max-w-56 rounded-lg bg-background/95 px-2 py-1 text-xs shadow-sm ring-1 ring-border'
@@ -241,6 +245,15 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
     setHover(pointAt(event))
   }
 
+  // Back to the layer's own fitted view, the same one it opens on (or a world view without bounds).
+  function resetView() {
+    const map = mapRef.current
+    if (!map) return
+    const duration = prefersReducedMotion() ? 0 : RESET_ANIMATION_MS
+    if (bounds) map.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 15, duration })
+    else map.easeTo({ center: [0, 20], zoom: 1, duration })
+  }
+
   return (
     // `idle` fires only once every source is loaded and rendered, which needs the map's worker. The
     // attribute lets end-to-end tests wait for a map that really works, not just one that mounted.
@@ -373,6 +386,47 @@ export function LayerMap({ layer, styleFeatures }: LayerMapProps) {
             {track && <ToggleControl label="Track" pressed={showTrack} onChange={setShowTrack} />}
           </div>
         )}
+
+        <div className="pointer-events-none absolute top-2 right-2 z-10 flex flex-col items-end gap-2">
+          <div className="pointer-events-auto flex flex-col overflow-hidden rounded-lg bg-background/95 shadow-sm ring-1 ring-border">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-none"
+              aria-label="Zoom in"
+              onClick={() => {
+                mapRef.current?.zoomIn({
+                  duration: prefersReducedMotion() ? 0 : ZOOM_ANIMATION_MS,
+                })
+              }}
+            >
+              <Plus />
+            </Button>
+            <div className="h-px bg-border" />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-none"
+              aria-label="Zoom out"
+              onClick={() => {
+                mapRef.current?.zoomOut({
+                  duration: prefersReducedMotion() ? 0 : ZOOM_ANIMATION_MS,
+                })
+              }}
+            >
+              <Minus />
+            </Button>
+          </div>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="pointer-events-auto bg-background/95"
+            aria-label="Reset view"
+            onClick={resetView}
+          >
+            <RotateCcw />
+          </Button>
+        </div>
 
         <div className="pointer-events-none absolute bottom-6 left-2 flex flex-col items-start gap-2">
           {colorKey && !scheme && styleFeatures && (

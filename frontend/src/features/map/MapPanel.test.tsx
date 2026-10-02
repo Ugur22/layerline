@@ -8,20 +8,37 @@ import { useMapView } from './mapView'
 import { renderWithClient } from '@/test/render'
 import { MapPanel } from './MapPanel'
 
+// The fake map instance the mocked `Map` component hands out through its ref, so tests can assert
+// on the view-control buttons without a real WebGL map. `vi.hoisted` runs before `vi.mock`, whose
+// factory below is itself hoisted above the imports.
+const mapHandle = vi.hoisted(() => ({
+  zoomIn: vi.fn(),
+  zoomOut: vi.fn(),
+  fitBounds: vi.fn(),
+  easeTo: vi.fn(),
+}))
+
 // jsdom has no WebGL, so the map library is replaced by stubs that expose what they receive.
 vi.mock('react-map-gl/maplibre', async () => {
   const React = await import('react')
   return {
-    default: (props: { mapStyle: string; initialViewState: unknown; children: unknown }) =>
-      React.createElement(
-        'div',
-        {
-          'data-testid': 'map',
-          'data-style': props.mapStyle,
-          'data-view': JSON.stringify(props.initialViewState),
-        },
-        props.children as never,
-      ),
+    default: React.forwardRef(
+      (
+        props: { mapStyle: string; initialViewState: unknown; children: unknown },
+        ref: React.Ref<typeof mapHandle>,
+      ) => {
+        React.useImperativeHandle(ref, () => mapHandle)
+        return React.createElement(
+          'div',
+          {
+            'data-testid': 'map',
+            'data-style': props.mapStyle,
+            'data-view': JSON.stringify(props.initialViewState),
+          },
+          props.children as never,
+        )
+      },
+    ),
     Source: (props: {
       id: string
       data: { features?: unknown[]; geometry?: { coordinates: unknown } }
@@ -157,6 +174,10 @@ describe('MapPanel', () => {
     useImportSession.setState({ jobId: 'job-1', filter: null })
     useMapInspection.getState().clear()
     useMapView.getState().reset()
+    mapHandle.zoomIn.mockClear()
+    mapHandle.zoomOut.mockClear()
+    mapHandle.fitBounds.mockClear()
+    mapHandle.easeTo.mockClear()
   })
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -272,6 +293,62 @@ describe('MapPanel', () => {
 
     expect(await screen.findByRole('button', { name: 'Track' })).toBeInTheDocument()
     expect(screen.queryByRole('radiogroup', { name: 'Colour by' })).not.toBeInTheDocument()
+  })
+
+  describe('map view controls', () => {
+    it('zooms in and out on the map', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.95, 52.4])),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      await screen.findByTestId('map')
+
+      await user.click(screen.getByRole('button', { name: 'Zoom in' }))
+      expect(mapHandle.zoomIn).toHaveBeenCalledTimes(1)
+
+      await user.click(screen.getByRole('button', { name: 'Zoom out' }))
+      expect(mapHandle.zoomOut).toHaveBeenCalledTimes(1)
+    })
+
+    it('resets to the layer bounds it was fitted to', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layer([4.9, 52.37, 4.95, 52.4])),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      await screen.findByTestId('map')
+
+      await user.click(screen.getByRole('button', { name: 'Reset view' }))
+
+      expect(mapHandle.fitBounds).toHaveBeenCalledWith(
+        [
+          [4.9, 52.37],
+          [4.95, 52.4],
+        ],
+        expect.objectContaining({ maxZoom: 15 }),
+      )
+      expect(mapHandle.easeTo).not.toHaveBeenCalled()
+    })
+
+    it('resets to a world view when the layer has no bounding box', async () => {
+      mockApi({
+        '/api/v1/imports/job-1': () => json({ import_job: job({}) }),
+        '/api/v1/map-layers/layer-1': () => json(layer(null)),
+      })
+      const user = userEvent.setup()
+      renderWithClient(<MapPanel pollIntervalMs={POLL_MS} />)
+      await screen.findByTestId('map')
+
+      await user.click(screen.getByRole('button', { name: 'Reset view' }))
+
+      expect(mapHandle.easeTo).toHaveBeenCalledWith(
+        expect.objectContaining({ center: [0, 20], zoom: 1 }),
+      )
+      expect(mapHandle.fitBounds).not.toHaveBeenCalled()
+    })
   })
 
   describe('value profile', () => {
